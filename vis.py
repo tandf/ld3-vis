@@ -1,11 +1,14 @@
 #! /bin/env python3
 
+from __future__ import annotations
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from typing import List, Tuple
 import shutil
 import os 
 from alive_progress import alive_bar
+import copy
+import numpy as np
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -17,16 +20,29 @@ class Point:
     def loc(self) -> Tuple[int, int]:
         return (self.x, self.y)
 
-    def __add__(self, another):
+    def in_view(self, view: Tuple) -> bool:
+        # view is a tuple of two points: leftbottom and righttop
+        left, right = view[0].x, view[1].x
+        bottom, top = view[0].y, view[1].y
+        return self.x >= left and self.x <= right and self.y >= bottom and \
+                self.y <= top
+
+    def __add__(self, another: Point):
         assert isinstance(another, Point)
         return Point(self.x + another.x, self.y + another.y)
 
-    def __sub__(self, another):
+    def __sub__(self, another: Point):
         assert isinstance(another, Point)
         return Point(self.x - another.x, self.y - another.y)
 
     def __str__(self) -> str:
         return f"({self.x}, {self.y})"
+
+    @classmethod
+    def nd_error(cls, loc: Point, scale: Point):
+        x = np.random.normal(loc=loc.x, scale=scale.x)
+        y = np.random.normal(loc=loc.y, scale=scale.y)
+        return Point(x, y)
 
 
 class Actor:
@@ -51,19 +67,36 @@ class Scene:
         os.mkdir(self.out_dir)
 
         # Animation setting
-        self.speed_rate = .5
+        self.speed_factor = .5
         self.fps = 60
         self.cnt = 0
         self.time = 0
 
         # Camera setting
-        self.limits = Point(15, 15)  # meter
-        self.ego_relpos = Point(4, 5)  # meter
+        self.limits = Point(24, 18)  # meter
+        self.ego_relpos = Point(12, 8)  # meter
 
         # Actors
         self.actors = []
-        self.ego = Ego()
+
+        # Ego vehicle
+        self.ego = Car(pos=Point(0, 0), speedx=20)
         self.actors.append(self.ego)
+
+        # Real trajectory of ego vehicle
+        self.actors.append(Trajectory(self.ego, lambda x: x))
+
+        # GPS measurement of ego vehicle (add normal distribution errors)
+        def gps_sampling(x: Point):
+            return x + Point.nd_error(Point(0, 0), Point(.5, .5))
+        gps_meas = Trajectory(self.ego, gps_sampling, .3)
+        gps_meas.marker_style["color"] = "green"
+        gps_meas.line_style["color"] = "green"
+        self.actors.append(gps_meas)
+
+        self.actors.append(Car(pos=Point(0, 4), speedx=18))
+
+        # Add road
         self.actors.append(Road())
 
     def get_leftbottom(self) -> Point:
@@ -73,9 +106,13 @@ class Scene:
         leftbottom = self.get_leftbottom()
         righttop = leftbottom + self.limits
 
-        f = plt.figure()
+        f = plt.figure(figsize=(8, 6), dpi=100)
         plt.xlim(leftbottom.x, righttop.x)
         plt.ylim(leftbottom.y, righttop.y)
+        ax = plt.gca()
+        #  ax.get_yaxis().set_visible(False)
+        for spine in ax.spines.values():
+            spine.set_visible(False)
         #  plt.tight_layout()
 
         for actor in self.actors:
@@ -86,7 +123,7 @@ class Scene:
         plt.close(f)
 
     def step(self) -> None:
-        dt = 1 / self.fps * self.speed_rate
+        dt = 1 / self.fps * self.speed_factor
 
         for actor in self.actors:
             actor.step(dt)
@@ -96,19 +133,107 @@ class Scene:
         self.cnt += 1
 
 
-class Ego(Actor):
-    def __init__(self):
-        self.xspeed = 20  # m/s
-        self.yspeed = 0  # m/s
-        self.pos = Point(0, 0)
+class Car(Actor):
+    def __init__(self, speedx: int = 0, speedy: int = 0, pos: Point = None):
+        self.xspeed = speedx  # m/s
+        self.yspeed = speedy  # m/s
+        self.pos = pos if pos else Point(0, 0)
 
     def step(self, dt: float) -> None:
         delta = Point(dt*self.xspeed, dt*self.yspeed)
         self.pos += delta
 
-    def plot(self, view: Tuple[Point, Point]) -> None:
-        plt.scatter(self.pos.x, self.pos.y)
+    def in_view(self, view: Tuple[Point, Point]) -> bool:
+        # TODO: Check based on the dimensions of the car
+        return True
 
+    def plot(self, view: Tuple[Point, Point]) -> None:
+        if self.in_view(view):
+            plt.scatter(self.pos.x, self.pos.y)
+
+
+class Trajectory(Actor):
+    trajectory: List[Point]
+    ANIMATION_FRAME = 10
+    MARKER_SIZE = 60
+
+    DEFAULT_MARKER_STYLE = {
+        "marker": "+",
+        "color": "grey",
+    }
+
+    DEFAULT_LINE_STYLE = {
+        "ls": ":",
+        "marker": "None",
+        "color": "grey",
+    }
+
+    def __init__(self, car: Car, get_pos_cb, sample_period: float = 0.1,
+                 marker_style: dict = None, line_style: dict = None):
+        self.trajectory = []
+        self.car = car
+        self.sample_period = sample_period
+        self.time = 0
+
+        self.marker_style = marker_style if marker_style else copy.deepcopy(
+            self.DEFAULT_MARKER_STYLE)
+        self.line_style = line_style if line_style else copy.deepcopy(
+            self.DEFAULT_LINE_STYLE)
+
+        self._get_pos_callback = get_pos_cb
+
+    def _get_pos_callback(self, pos: Point) -> Point:
+        raise Exception("Uninitialized")
+
+    def _add_pos(self) -> None:
+        pos = self._get_pos_callback(copy.deepcopy(self.car.pos))
+        pos.frame_cnt = 0
+        self.trajectory.append(pos)
+
+    def step(self, dt: float) -> None:
+        self.time += dt
+        if self.time >= self.sample_period:
+            self._add_pos()
+            self.time -= self.sample_period
+
+    def _update_pos(self, view: Tuple[Point, Point]) -> None:
+        # Remove trajectories out of view
+        first_idx = 0
+        for idx, p in enumerate(self.trajectory):
+            if p.in_view(view):
+                first_idx = idx
+                break
+
+        self.trajectory = [p for idx, p in enumerate(
+            self.trajectory) if idx + 1 >= first_idx]
+        for p in self.trajectory:
+            p.frame_cnt += 1
+
+    def getxy(self, trajectory: List[Point] = None) -> None:
+        trajectory = trajectory if trajectory else self.trajectory
+        X = [p.x for p in trajectory]
+        Y = [p.y for p in trajectory]
+        return X, Y
+
+    def plot(self, view: Tuple[Point, Point]) -> None:
+        # Remove outdated points
+        self._update_pos(view)
+
+        # Plot dotted lines
+        X, Y = self.getxy()
+        plt.plot(X, Y, **self.line_style)
+
+        old_trajectory = [p for p in self.trajectory
+                          if p.frame_cnt > self.ANIMATION_FRAME]
+        X, Y = self.getxy(old_trajectory)
+        plt.scatter(X, Y, s=self.MARKER_SIZE, **self.marker_style)
+
+        new_trajectory = [p for p in self.trajectory
+                          if p.frame_cnt <= self.ANIMATION_FRAME]
+        for p in new_trajectory:
+            frame_cnt = p.frame_cnt
+            ratio = 1 + 7 * (1 - frame_cnt/self.ANIMATION_FRAME)
+            plt.scatter(p.x, p.y, s=self.MARKER_SIZE * ratio, **self.marker_style)
 
 class Road(Actor):
     def __init__(self):
@@ -161,7 +286,7 @@ class Road(Actor):
 
 if __name__ == "__main__":
     scene = Scene()
-    steps = 30
+    steps = 200
     with alive_bar(steps) as bar:
         for i in range(steps):
             scene.plot()
