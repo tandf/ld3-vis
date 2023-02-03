@@ -9,8 +9,21 @@ import os
 from alive_progress import alive_bar
 import copy
 import numpy as np
+import cairosvg
+from PIL import Image
+from io import BytesIO
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
+
+def load_car_texture(heading: str = "right") -> Image.Image:
+    png = cairosvg.svg2png(url="pics/car-top.svg")
+    img = Image.open(BytesIO(png))
+    if heading == "right":
+        img = img.transpose(Image.ROTATE_270)
+    else:
+        img = img.transpose(Image.ROTATE_90)
+    return img
+
 
 class Point:
     def __init__(self, x:int, y:int):
@@ -73,14 +86,15 @@ class Scene:
         self.time = 0
 
         # Camera setting
-        self.limits = Point(24, 18)  # meter
-        self.ego_relpos = Point(12, 8)  # meter
+        self.limits = Point(40, 30)  # meter
+        self.ego_relpos = Point(20, 12)  # meter
 
         # Actors
         self.actors = []
 
         # Ego vehicle
         self.ego = Car(pos=Point(0, 0), speedx=20)
+        self.ego.set_texture(load_car_texture())
         self.actors.append(self.ego)
 
         # Real trajectory of ego vehicle
@@ -94,7 +108,10 @@ class Scene:
         gps_meas.line_style["color"] = "green"
         self.actors.append(gps_meas)
 
-        self.actors.append(Car(pos=Point(0, 4), speedx=18))
+        # NPC car
+        npc = Car(pos=Point(20, 4), speedx=-10)
+        npc.set_texture(load_car_texture(heading="left"))
+        self.actors.append(npc)
 
         # Add road
         self.actors.append(Road())
@@ -139,6 +156,11 @@ class Car(Actor):
         self.yspeed = speedy  # m/s
         self.pos = pos if pos else Point(0, 0)
 
+        self.texture = None
+
+    def set_texture(self, texture: Image.Image):
+        self.texture = texture
+
     def step(self, dt: float) -> None:
         delta = Point(dt*self.xspeed, dt*self.yspeed)
         self.pos += delta
@@ -149,12 +171,16 @@ class Car(Actor):
 
     def plot(self, view: Tuple[Point, Point]) -> None:
         if self.in_view(view):
-            plt.scatter(self.pos.x, self.pos.y)
+            #  plt.scatter(self.pos.x, self.pos.y)
+            ax = plt.gca()
+            if self.texture:
+                ax.imshow(self.texture, extent=(self.pos.x - 2,
+                          self.pos.x + 2, self.pos.y - 1.5, self.pos.y + 1.5))
 
 
 class Trajectory(Actor):
     trajectory: List[Point]
-    ANIMATION_FRAME = 10
+    ANIMATION_FRAME = 20
     MARKER_SIZE = 60
 
     DEFAULT_MARKER_STYLE = {
@@ -286,7 +312,7 @@ class Road(Actor):
 
 if __name__ == "__main__":
     scene = Scene()
-    steps = 200
+    steps = 500
     with alive_bar(steps) as bar:
         for i in range(steps):
             scene.plot()
