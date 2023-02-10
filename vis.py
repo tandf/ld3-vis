@@ -60,16 +60,32 @@ class Scene:
         self.actors.append(self.ego)
 
         # Real trajectory of ego vehicle
-        self.actors.append(Trajectory(self.ego, lambda x: x, self.fps))
+        real_meas = Trajectory(self.ego, lambda x: x, self.fps)
+        real_meas.MARKER_SIZE = 10
+        self.actors.append(real_meas)
 
         # GPS measurement of ego vehicle (add normal distribution errors)
-        def gps_sampling(x: Point):
-            return x + Point.nd_error(Point(0, 0), Point(.5, .5))
-        gps_meas = Trajectory(self.ego, gps_sampling, self.fps, .3)
+        def gps_sampling(p: Point):
+            return p + Point.nd_error(Point(0, 0), Point(.5, .5))
+        gps_meas = Trajectory(self.ego, gps_sampling, self.fps, .1)
         gps_meas.marker_style["color"] = "green"
         gps_meas.line_style["color"] = "green"
-        self.actors.append(gps_meas)
-        egoController.traj = gps_meas
+        #  self.actors.append(gps_meas)
+
+        # Attacker measurement
+        class Attack:
+            def __init__(self, yinit:int):
+                self.y = yinit
+                self.dy = -0.05
+            def __call__(self, p: Point) -> Point:
+                self.y += self.dy
+                self.dy *= 1.1
+                return Point(p.x, self.y)
+        attack_meas = Trajectory(self.ego, Attack(0), self.fps, .1)
+        attack_meas.marker_style["color"] = "red"
+        attack_meas.line_style["color"] = "red"
+        self.actors.append(attack_meas)
+        egoController.traj = attack_meas
 
         # NPC car
         npc = Car(pos=Point(20, 4),
@@ -117,7 +133,7 @@ class Scene:
 
 
 if __name__ == "__main__":
-    steps = 100
+    steps = 30
     fps = 10
     dpi = 100
     out_dir = os.path.join(dir_path, "out")

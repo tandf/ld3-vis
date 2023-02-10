@@ -5,6 +5,8 @@ from matplotlib.patches import Rectangle
 from typing import Tuple, List
 import copy
 import matplotlib.pyplot as plt
+from scipy import ndimage
+import numpy as np
 
 class Actor:
     priority: int
@@ -18,6 +20,7 @@ class Actor:
     def plot(self, view: Tuple[Point, Point]):
         raise Exception("Uninitialized")
 
+    # TODO: check if should be deleted
 
 class Car(Actor):
     def __init__(self, controller, pos: Point = None):
@@ -25,8 +28,12 @@ class Car(Actor):
 
         self.controller = controller
         self.pos = pos if pos else Point(0, 0)
+        self.direction = 0
 
         self.texture = None
+        self.texture_rotate = False
+
+        # TODO: set direction based on speed
 
     def set_texture(self, texture: Image.Image):
         self.texture = texture
@@ -34,20 +41,39 @@ class Car(Actor):
     def step(self, dt: float) -> None:
         speed = self.controller.get_speed()
         assert speed, "Uninitialized controller!"
+        if speed.x > 30:
+            speed.x = 30
+        if speed.x < -30:
+            speed.x = -30
+        if speed.y > 5:
+            speed.y = 5
+        if speed.y < -5:
+            speed.y = -5
         self.pos += speed * dt
+        self.direction = np.arctan2(speed.y, speed.x) / np.pi * 180
 
     def in_view(self, view: Tuple[Point, Point]) -> bool:
         # TODO: Check based on the dimensions of the car
         return True
 
+    def attach_texture(self, ax) -> None:
+        if not self.texture:
+            return
+
+        if self.texture_rotate:
+            # TODO: get the correct extent
+            texture = ndimage.rotate(self.texture, self.direction)
+        else:
+            texture = self.texture
+
+        ax.imshow(texture, extent=(self.pos.x - 2,
+                  self.pos.x + 2, self.pos.y - 1.5, self.pos.y + 1.5))
+
     def plot(self, view: Tuple[Point, Point]) -> None:
         if self.in_view(view):
             #  plt.scatter(self.pos.x, self.pos.y)
             ax = plt.gca()
-            if self.texture:
-                ax.imshow(self.texture, extent=(self.pos.x - 2,
-                          self.pos.x + 2, self.pos.y - 1.5, self.pos.y + 1.5))
-
+            self.attach_texture(ax)
 
 class Trajectory(Actor):
     trajectory: List[Point]
@@ -65,7 +91,7 @@ class Trajectory(Actor):
         "color": "grey",
     }
 
-    def __init__(self, car: Car, get_pos_cb, fps: int, sample_period: float = 0.1,
+    def __init__(self, car: Car, get_pos_cb, fps: int, sample_period: float = 0.05,
                  marker_style: dict = None, line_style: dict = None):
         super().__init__()
 
