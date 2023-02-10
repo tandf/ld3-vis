@@ -59,8 +59,10 @@ class Point:
 
 
 class Actor:
-    def __init__(self):
-        pass
+    priority: int
+
+    def __init__(self, priority: int = 50):
+        self.priority = priority
 
     def step(self, dt: float):
         raise Exception("Uninitialized")
@@ -119,6 +121,8 @@ class Scene:
         # Add road
         self.actors.append(Road())
 
+        self.actors.sort(key=lambda a: a.priority)
+
     def get_leftbottom(self) -> Point:
         return self.ego.pos - self.ego_relpos
 
@@ -155,6 +159,8 @@ class Scene:
 
 class Car(Actor):
     def __init__(self, speedx: int = 0, speedy: int = 0, pos: Point = None):
+        super().__init__(99)
+
         self.xspeed = speedx  # m/s
         self.yspeed = speedy  # m/s
         self.pos = pos if pos else Point(0, 0)
@@ -199,6 +205,8 @@ class Trajectory(Actor):
 
     def __init__(self, car: Car, get_pos_cb, fps: int, sample_period: float = 0.1,
                  marker_style: dict = None, line_style: dict = None):
+        super().__init__()
+
         self.trajectory = []
         self.car = car
         self.fps = fps
@@ -268,6 +276,8 @@ class Trajectory(Actor):
 
 class Road(Actor):
     def __init__(self):
+        super().__init__(1)
+
         # https://news.osu.edu/slow-down----those-lines-on-the-road-are-longer-than-you-think/
         self.dashed_line = (3, 9)  # 10 feet line with 30 feet space
         self.line_width = .1 # meters
