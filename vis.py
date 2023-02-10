@@ -72,7 +72,8 @@ class Actor:
 class Scene:
     actors: List[Actor]
 
-    def __init__(self, out_dir=os.path.join(dir_path, "out")):
+    def __init__(self, out_dir=os.path.join(dir_path, "out"), fps: int = 60,
+                 fig_size: Tuple[int, int] = (8, 6), dpi: int = 100):
         self.out_dir = out_dir
 
         if os.path.isdir(self.out_dir):
@@ -81,9 +82,11 @@ class Scene:
 
         # Animation setting
         self.speed_factor = .5
-        self.fps = 60
+        self.fps = fps
         self.cnt = 0
         self.time = 0
+        self.fig_size = fig_size
+        self.dpi = dpi
 
         # Camera setting
         self.limits = Point(40, 30)  # meter
@@ -98,12 +101,12 @@ class Scene:
         self.actors.append(self.ego)
 
         # Real trajectory of ego vehicle
-        self.actors.append(Trajectory(self.ego, lambda x: x))
+        self.actors.append(Trajectory(self.ego, lambda x: x, self.fps))
 
         # GPS measurement of ego vehicle (add normal distribution errors)
         def gps_sampling(x: Point):
             return x + Point.nd_error(Point(0, 0), Point(.5, .5))
-        gps_meas = Trajectory(self.ego, gps_sampling, .3)
+        gps_meas = Trajectory(self.ego, gps_sampling, self.fps, .3)
         gps_meas.marker_style["color"] = "green"
         gps_meas.line_style["color"] = "green"
         self.actors.append(gps_meas)
@@ -123,7 +126,7 @@ class Scene:
         leftbottom = self.get_leftbottom()
         righttop = leftbottom + self.limits
 
-        f = plt.figure(figsize=(8, 6), dpi=100)
+        f = plt.figure(figsize=self.fig_size, dpi=self.dpi)
         plt.xlim(leftbottom.x, righttop.x)
         plt.ylim(leftbottom.y, righttop.y)
         ax = plt.gca()
@@ -180,7 +183,7 @@ class Car(Actor):
 
 class Trajectory(Actor):
     trajectory: List[Point]
-    ANIMATION_FRAME = 20
+    ANIMATION_TIME = 1
     MARKER_SIZE = 60
 
     DEFAULT_MARKER_STYLE = {
@@ -194,10 +197,11 @@ class Trajectory(Actor):
         "color": "grey",
     }
 
-    def __init__(self, car: Car, get_pos_cb, sample_period: float = 0.1,
+    def __init__(self, car: Car, get_pos_cb, fps: int, sample_period: float = 0.1,
                  marker_style: dict = None, line_style: dict = None):
         self.trajectory = []
         self.car = car
+        self.fps = fps
         self.sample_period = sample_period
         self.time = 0
 
@@ -250,16 +254,17 @@ class Trajectory(Actor):
         plt.plot(X, Y, **self.line_style)
 
         old_trajectory = [p for p in self.trajectory
-                          if p.frame_cnt > self.ANIMATION_FRAME]
+                          if p.frame_cnt / self.fps > self.ANIMATION_TIME]
         X, Y = self.getxy(old_trajectory)
         plt.scatter(X, Y, s=self.MARKER_SIZE, **self.marker_style)
 
         new_trajectory = [p for p in self.trajectory
-                          if p.frame_cnt <= self.ANIMATION_FRAME]
+                          if p.frame_cnt / self.fps <= self.ANIMATION_TIME]
         for p in new_trajectory:
             frame_cnt = p.frame_cnt
-            ratio = 1 + 7 * (1 - frame_cnt/self.ANIMATION_FRAME)
-            plt.scatter(p.x, p.y, s=self.MARKER_SIZE * ratio, **self.marker_style)
+            ratio = 1 + 7 * (1 - frame_cnt / self.fps / self.ANIMATION_TIME)
+            plt.scatter(p.x, p.y, s=self.MARKER_SIZE *
+                        ratio, **self.marker_style)
 
 class Road(Actor):
     def __init__(self):
@@ -311,10 +316,27 @@ class Road(Actor):
                 self.draw_dashed_line(line, left, right)
 
 if __name__ == "__main__":
-    scene = Scene()
-    steps = 500
+    steps = 100
+    fps = 10
+    out_dir = os.path.join(dir_path, "out")
+
+    scene = Scene(out_dir, fps)
     with alive_bar(steps) as bar:
         for i in range(steps):
             scene.plot()
             scene.step()
             bar()
+
+    cmd = [f"ffmpeg -y",
+           f"-framerate {fps}",
+           f"-i {os.path.join(out_dir, '%06d.png')}",
+           f"-c:v libx264",
+           f"-profile:v high",
+           f"-crf 20",
+           f"-pix_fmt yuv420p",
+           f"-hide_banner",
+           f"-loglevel error",
+           f"out.mp4",
+           ]
+
+    os.system(" ".join(cmd))
