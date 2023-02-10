@@ -6,7 +6,6 @@ from typing import Tuple, List
 import copy
 import matplotlib.pyplot as plt
 
-
 class Actor:
     priority: int
 
@@ -21,11 +20,10 @@ class Actor:
 
 
 class Car(Actor):
-    def __init__(self, speedx: int = 0, speedy: int = 0, pos: Point = None):
+    def __init__(self, controller, pos: Point = None):
         super().__init__(99)
 
-        self.xspeed = speedx  # m/s
-        self.yspeed = speedy  # m/s
+        self.controller = controller
         self.pos = pos if pos else Point(0, 0)
 
         self.texture = None
@@ -34,8 +32,9 @@ class Car(Actor):
         self.texture = texture
 
     def step(self, dt: float) -> None:
-        delta = Point(dt*self.xspeed, dt*self.yspeed)
-        self.pos += delta
+        speed = self.controller.get_speed()
+        assert speed, "Uninitialized controller!"
+        self.pos += speed * dt
 
     def in_view(self, view: Tuple[Point, Point]) -> bool:
         # TODO: Check based on the dimensions of the car

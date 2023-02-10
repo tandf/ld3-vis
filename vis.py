@@ -12,6 +12,7 @@ import shutil
 
 from Point import Point
 from Actor import *
+from Controller import *
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
 
@@ -53,7 +54,8 @@ class Scene:
         self.actors = []
 
         # Ego vehicle
-        self.ego = Car(pos=Point(0, 0), speedx=20)
+        egoController = PIDController(Point(20, 0), yref=0)
+        self.ego = Car(pos=Point(0, 0), controller=egoController)
         self.ego.set_texture(load_car_texture())
         self.actors.append(self.ego)
 
@@ -67,9 +69,11 @@ class Scene:
         gps_meas.marker_style["color"] = "green"
         gps_meas.line_style["color"] = "green"
         self.actors.append(gps_meas)
+        egoController.traj = gps_meas
 
         # NPC car
-        npc = Car(pos=Point(20, 4), speedx=-10)
+        npc = Car(pos=Point(20, 4),
+                  controller=Controller(Point(-10, 0)))
         npc.set_texture(load_car_texture(heading="left"))
         self.actors.append(npc)
 
@@ -115,9 +119,10 @@ class Scene:
 if __name__ == "__main__":
     steps = 100
     fps = 10
+    dpi = 100
     out_dir = os.path.join(dir_path, "out")
 
-    scene = Scene(out_dir, fps)
+    scene = Scene(out_dir, fps, dpi=dpi)
     with alive_bar(steps) as bar:
         for i in range(steps):
             scene.plot()

@@ -17,13 +17,16 @@ class Point:
         return self.x >= left and self.x <= right and self.y >= bottom and \
                 self.y <= top
 
-    def __add__(self, another: Point):
+    def __add__(self, another: Point) -> Point:
         assert isinstance(another, Point)
         return Point(self.x + another.x, self.y + another.y)
 
-    def __sub__(self, another: Point):
+    def __sub__(self, another: Point) -> Point:
         assert isinstance(another, Point)
         return Point(self.x - another.x, self.y - another.y)
+
+    def __mul__(self, factor: float) -> Point:
+        return Point(self.x * factor, self.y * factor)
 
     def __str__(self) -> str:
         return f"({self.x}, {self.y})"
