@@ -9,7 +9,7 @@ import copy
 import matplotlib.pyplot as plt
 import numpy as np
 
-from Point import Point
+from Point import *
 
 
 class Actor:
@@ -21,10 +21,11 @@ class Actor:
     def step(self, dt: float):
         raise Exception("Uninitialized")
 
-    def plot(self, view: Tuple[Point, Point]):
+    def plot(self, view: Rect):
         raise Exception("Uninitialized")
 
-    # TODO: check if should be deleted
+    def done(self) -> bool:
+        return False
 
 
 class Car(Actor):
@@ -37,6 +38,9 @@ class Car(Actor):
 
         self.texture = None
         self.texture_rotate = False
+
+        self.in_once = False
+        self.is_done = False
 
     def load_texture(self, file: str = "pics/car-top.svg",
                      heading: str = "right") -> Image.Image:
@@ -62,9 +66,14 @@ class Car(Actor):
         self.pos += speed * dt
         self.direction = np.arctan2(speed.y, speed.x) / np.pi * 180
 
-    def in_view(self, view: Tuple[Point, Point]) -> bool:
-        # TODO: Check based on the dimensions of the car
-        return True
+    def get_rect(self) -> Rect:
+        leftbottom = Point(self.pos.x - 2, self.pos.y - 1.5)
+        righttop = Point(self.pos.x + 2, self.pos.y + 1.5)
+        return Rect(leftbottom, righttop)
+
+    def in_view(self, view: Rect) -> bool:
+        rect = self.get_rect()
+        return rect.leftbottom in view or rect.righttop in view
 
     def attach_texture(self, ax) -> None:
         if not self.texture:
@@ -76,14 +85,21 @@ class Car(Actor):
         else:
             texture = self.texture
 
-        ax.imshow(texture, extent=(self.pos.x - 2,
-                  self.pos.x + 2, self.pos.y - 1.5, self.pos.y + 1.5))
+        rect = self.get_rect()
+        ax.imshow(texture, extent=(rect.leftbottom.x,
+                  rect.righttop.x, rect.leftbottom.y, rect.righttop.y))
 
-    def plot(self, view: Tuple[Point, Point]) -> None:
+    def plot(self, view: Rect) -> None:
         if self.in_view(view):
             #  plt.scatter(self.pos.x, self.pos.y)
+            self.in_once = True
             ax = plt.gca()
             self.attach_texture(ax)
+        elif self.in_once:
+            self.is_done = True
+
+    def done(self) -> bool:
+        return self.is_done
 
 
 class Trajectory(Actor):
@@ -133,11 +149,11 @@ class Trajectory(Actor):
             self._add_pos()
             self.time -= self.sample_period
 
-    def _update_pos(self, view: Tuple[Point, Point]) -> None:
+    def _update_pos(self, view: Rect) -> None:
         # Remove trajectories out of view
         first_idx = 0
         for idx, p in enumerate(self.trajectory):
-            if p.in_view(view):
+            if p in view:
                 first_idx = idx
                 break
 
@@ -152,7 +168,7 @@ class Trajectory(Actor):
         Y = [p.y for p in trajectory]
         return X, Y
 
-    def plot(self, view: Tuple[Point, Point]) -> None:
+    def plot(self, view: Rect) -> None:
         # Remove outdated points
         self._update_pos(view)
 
@@ -213,9 +229,9 @@ class Road(Actor):
                          end - start, self.line_width))
             start = end + self.dashed_line[1]
 
-    def plot(self, view: Tuple[Point, Point]) -> None:
-        left, right = view[0].x, view[1].x
-        bottom, top = view[0].y, view[1].y
+    def plot(self, view: Rect) -> None:
+        left, right = view.leftbottom.x, view.righttop.x
+        bottom, top = view.leftbottom.y, view.righttop.y
 
         for line in self.solid_lines:
             if self.line_in_view(line, top, bottom):

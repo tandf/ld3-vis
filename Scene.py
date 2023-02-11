@@ -9,36 +9,36 @@ import shutil
 
 from Actor import *
 from Controller import *
-from Point import Point
+from Point import *
 
 class Camera:
     def __init__(self, get_view: function = None) -> None:
         self._get_view = get_view
 
     def _follow_ego(self) -> None:
-        def get_view(self, ego: Car) -> Point:
+        def get_view(self, ego: Car) -> Rect:
             leftbottom = ego.pos - self.ego_relpos
             righttop = leftbottom + self.limits
-            return leftbottom, righttop
+            return Rect(leftbottom, righttop)
         self.limits = Point(40, 30)  # meter
         self.ego_relpos = Point(20, 12)  # meter
         self._get_view = get_view
 
     def _follow_ego_x(self) -> None:
-        def get_view(self, ego: Car) -> Point:
+        def get_view(self, ego: Car) -> Rect:
             ego_pos = copy.deepcopy(ego.pos)
             if not self._y:
                 self._y = ego_pos.y
             ego_pos.y = self._y
             leftbottom = ego_pos - self.ego_relpos
             righttop = leftbottom + self.limits
-            return leftbottom, righttop
+            return Rect(leftbottom, righttop)
         self.limits = Point(40, 30)  # meter
         self.ego_relpos = Point(20, 12)  # meter
         self._y = None
         self._get_view = get_view
 
-    def get_view(self, ego: Actor) -> Tuple[Point, Point]:
+    def get_view(self, ego: Actor) -> Rect:
         assert(self._get_view)
         return self._get_view(self, ego)
 
@@ -77,11 +77,11 @@ class Scene:
         self.actors.sort(key=lambda a: a.priority)
 
     def plot(self) -> None:
-        leftbottom, righttop = self.camera.get_view(self.ego)
+        view = self.camera.get_view(self.ego)
 
         f = plt.figure(figsize=self.fig_size, dpi=self.dpi)
-        plt.xlim(leftbottom.x, righttop.x)
-        plt.ylim(leftbottom.y, righttop.y)
+        plt.xlim(view.leftbottom.x, view.righttop.x)
+        plt.ylim(view.leftbottom.y, view.righttop.y)
         ax = plt.gca()
         #  ax.get_yaxis().set_visible(False)
         for spine in ax.spines.values():
@@ -89,7 +89,7 @@ class Scene:
         #  plt.tight_layout()
 
         for actor in self.actors:
-            actor.plot(view=(leftbottom, righttop))
+            actor.plot(view=view)
 
         filename = f"{self.cnt:06d}.png"
         f.savefig(os.path.join(self.out_dir, filename))
@@ -100,6 +100,7 @@ class Scene:
 
         for actor in self.actors:
             actor.step(dt)
+        self.actors = [a for a in self.actors if not a.done()]
 
         # Finishing
         self.time += dt

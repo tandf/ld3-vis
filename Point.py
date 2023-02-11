@@ -10,13 +10,6 @@ class Point:
     def loc(self) -> Tuple[int, int]:
         return (self.x, self.y)
 
-    def in_view(self, view: Tuple) -> bool:
-        # view is a tuple of two points: leftbottom and righttop
-        left, right = view[0].x, view[1].x
-        bottom, top = view[0].y, view[1].y
-        return self.x >= left and self.x <= right and self.y >= bottom and \
-                self.y <= top
-
     def __add__(self, another: Point) -> Point:
         assert isinstance(another, Point)
         return Point(self.x + another.x, self.y + another.y)
@@ -39,3 +32,13 @@ class Point:
         x = np.random.normal(loc=loc.x, scale=scale.x)
         y = np.random.normal(loc=loc.y, scale=scale.y)
         return Point(x, y)
+
+class Rect:
+    def __init__(self, leftbottom:Point, righttop:Point) -> None:
+        self.leftbottom = leftbottom
+        self.righttop = righttop
+
+    def __contains__(self, p: Point) -> bool:
+        assert(isinstance(p, Point))
+        return p.x > self.leftbottom.x and p.x < self.righttop.x and \
+                p.y > self.leftbottom.y and p.y < self.righttop.y
