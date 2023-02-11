@@ -1,12 +1,16 @@
 from __future__ import annotations
 from PIL import Image
-from Point import Point
+from io import BytesIO
 from matplotlib.patches import Rectangle
+from scipy import ndimage
 from typing import Tuple, List
+import cairosvg
 import copy
 import matplotlib.pyplot as plt
-from scipy import ndimage
 import numpy as np
+
+from Point import Point
+
 
 class Actor:
     priority: int
@@ -22,6 +26,7 @@ class Actor:
 
     # TODO: check if should be deleted
 
+
 class Car(Actor):
     def __init__(self, controller, pos: Point = None):
         super().__init__(99)
@@ -33,10 +38,15 @@ class Car(Actor):
         self.texture = None
         self.texture_rotate = False
 
-        # TODO: set direction based on speed
-
-    def set_texture(self, texture: Image.Image):
-        self.texture = texture
+    def load_texture(self, file: str = "pics/car-top.svg",
+                     heading: str = "right") -> Image.Image:
+        png = cairosvg.svg2png(url=file)
+        img = Image.open(BytesIO(png))
+        if heading == "right":
+            img = img.transpose(Image.ROTATE_270)
+        else:
+            img = img.transpose(Image.ROTATE_90)
+        self.texture = img
 
     def step(self, dt: float) -> None:
         speed = self.controller.get_speed()
@@ -74,6 +84,7 @@ class Car(Actor):
             #  plt.scatter(self.pos.x, self.pos.y)
             ax = plt.gca()
             self.attach_texture(ax)
+
 
 class Trajectory(Actor):
     trajectory: List[Point]
