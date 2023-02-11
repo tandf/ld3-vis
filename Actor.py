@@ -30,7 +30,7 @@ class Actor:
 
 class Car(Actor):
     def __init__(self, controller, pos: Point = None):
-        super().__init__(99)
+        super().__init__(90)
 
         self.controller = controller
         self.pos = pos if pos else Point(0, 0)
@@ -240,3 +240,63 @@ class Road(Actor):
         for line in self.dashed_lines:
             if self.line_in_view(line, top, bottom):
                 self.draw_dashed_line(line, left, right)
+
+
+class Text(Actor):
+    FADEIN_TIME = 1
+    FADEOUT_TIME = 1
+
+    FONT_SIZE = 14
+
+    def __init__(self, text: str, pos: Point, start_time: float = 0,
+                 end_time: float = float("inf"), text_style: dict = None):
+        super().__init__(99)
+
+        self.text = text
+        self.text_pos = pos
+        self.start_time = start_time
+        self.end_time = end_time
+        self.text_style = text_style if text_style else {}
+
+        self.time = 0
+
+    def step(self, dt: float):
+        self.time += dt
+
+    def visible(self) -> bool:
+        return self.time >= self.start_time and self.time <= self.end_time
+
+    def plot(self, view: Rect):
+        if self.visible():
+            self.alpha = min(
+                1,
+                (self.time - self.start_time) / self.FADEIN_TIME,
+                (self.end_time - self.time) / self.FADEOUT_TIME)
+            pos = self.text_pos + view.leftbottom
+            plt.text(pos.x, pos.y, self.text, verticalalignment="center",
+                     alpha=self.alpha, size=self.FONT_SIZE, **self.text_style)
+
+    def done(self) -> bool:
+        return self.time > self.end_time
+
+class TrajLegend(Text):
+    MARKER_SIZE = 100
+
+    def __init__(self, text: str, pos: Point, start_time: float = 0,
+                 end_time: float = float("inf"), text_style: dict = None,
+                 marker_style: dict = None):
+        text_pos = pos + Point(1, 0)
+        super().__init__(text, text_pos, start_time, end_time, text_style)
+
+        self.marker_pos = pos
+        self.marker_style = marker_style if marker_style else {}
+
+    def step(self, dt: float):
+        super().step(dt)
+
+    def plot(self, view: Rect):
+        super().plot(view)
+        if self.visible():
+            pos = self.marker_pos + view.leftbottom
+            plt.scatter(pos.x, pos.y, s=120, alpha=self.alpha,
+                        **self.marker_style)

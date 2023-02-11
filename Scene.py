@@ -27,15 +27,13 @@ class Camera:
     def _follow_ego_x(self) -> None:
         def get_view(self, ego: Car) -> Rect:
             ego_pos = copy.deepcopy(ego.pos)
-            if not self._y:
-                self._y = ego_pos.y
             ego_pos.y = self._y
             leftbottom = ego_pos - self.ego_relpos
             righttop = leftbottom + self.limits
             return Rect(leftbottom, righttop)
         self.limits = Point(40, 30)  # meter
         self.ego_relpos = Point(20, 12)  # meter
-        self._y = None
+        self._y = 0
         self._get_view = get_view
 
     def get_view(self, ego: Actor) -> Rect:
@@ -46,8 +44,9 @@ class Scene:
     actors: List[Actor]
     ego: Car
 
-    def __init__(self, out_dir, fps: int = 60,
-                 fig_size: Tuple[int, int] = (8, 6), dpi: int = 100):
+    def __init__(self, out_dir, fps: int = 60, speed_factor: float = 1,
+                 fig_size: Tuple[int, int] = (8, 6), dpi: int = 100,
+                 debug=False):
         self.out_dir = out_dir
 
         if os.path.isdir(self.out_dir):
@@ -55,12 +54,14 @@ class Scene:
         os.mkdir(self.out_dir)
 
         # Animation setting
-        self.speed_factor = .5
+        self.speed_factor = speed_factor
         self.fps = fps
         self.cnt = 0
         self.time = 0
         self.fig_size = fig_size
         self.dpi = dpi
+
+        self.debug = debug
 
         # Camera setting
         self.camera = Camera()
@@ -69,6 +70,10 @@ class Scene:
         # Actors
         self.actors = []
         self.ego = None
+
+    def set_ego(self, ego: Car) -> None:
+        self.ego = ego
+        self.camera._y = ego.pos.y
 
     def add_actor(self, actor: Actor) -> None:
         self.actors.append(actor)
@@ -83,13 +88,18 @@ class Scene:
         plt.xlim(view.leftbottom.x, view.righttop.x)
         plt.ylim(view.leftbottom.y, view.righttop.y)
         ax = plt.gca()
-        #  ax.get_yaxis().set_visible(False)
         for spine in ax.spines.values():
             spine.set_visible(False)
-        #  plt.tight_layout()
 
         for actor in self.actors:
             actor.plot(view=view)
+
+        if self.debug:
+            plt.title(f"{self.time:.1f} s")
+        else:
+            ax.get_yaxis().set_visible(False)
+            ax.get_xaxis().set_visible(False)
+            plt.tight_layout()
 
         filename = f"{self.cnt:06d}.png"
         f.savefig(os.path.join(self.out_dir, filename))
