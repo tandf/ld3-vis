@@ -20,7 +20,8 @@ def attack(debug:bool=False):
     scene = Scene(dir_path, "attack", fps, dpi=dpi, debug=debug)
 
     # Add road
-    scene.add_actor(Road())
+    road = Road()
+    scene.add_actor(road)
 
     # NPC car
     npc = Car(pos=Point(25, 4),
@@ -35,7 +36,7 @@ def attack(debug:bool=False):
     scene.add_actor(scene.ego)
 
     # Real trajectory of ego vehicle
-    real_meas = Trajectory(scene.ego, lambda x, t: x, scene.fps)
+    real_meas = Trajectory(scene.ego)
     real_meas.MARKER_SIZE = 10
     real_meas.add_cb(FadeInOutCB(start_time=0.5))
     scene.add_actor(real_meas)
@@ -60,7 +61,7 @@ def attack(debug:bool=False):
                 self.dy *= (1 + 0.03 * (time - self.time))
             self.time = time
             return Point(p.x, self.y)
-    msf_meas = Trajectory(scene.ego, Attack(0), scene.fps, .1)
+    msf_meas = Trajectory(scene.ego, Attack(0), .1)
     msf_meas.marker_style["color"] = "green"
     msf_meas.line_style["color"] = "green"
     msf_meas.add_cb(FadeInOutCB(start_time=0.5))
@@ -77,7 +78,7 @@ def attack(debug:bool=False):
     scene.add_actor(msf_meas_legend)
 
     # Attacker measurement
-    attack_meas = Trajectory(scene.ego, Attack(0), scene.fps, .1)
+    attack_meas = Trajectory(scene.ego, Attack(0), .1)
     attack_meas.marker_style["color"] = "red"
     attack_meas.line_style["color"] = "red"
     attack_meas.add_cb(FadeInOutCB(start_time=0.5))
@@ -93,6 +94,20 @@ def attack(debug:bool=False):
     attack_meas_legend.add_cb(FadeInOutCB(start_time=2, end_time=5))
     scene.add_actor(attack_meas_legend)
 
+    # Lane detection results
+    ld_meas = LaneDetection(scene.ego, road.get_lines(), Point(10, 0),
+                            GetPos.gausian_meas(scale=Point(0, .2)))
+    ld_meas.add_cb(FadeInOutCB(start_time=2.5))
+    scene.add_actor(ld_meas)
+
+    # LD measurement annotation
+    ld_meas_legend = TrajLegend(
+        "LD", Point(25, 2),
+        text_style={"color": ld_meas.marker_style["color"]},
+        marker_style=ld_meas.marker_style)
+    ld_meas_legend.add_cb(FadeInOutCB(start_time=2.5, end_time=5))
+    scene.add_actor(ld_meas_legend)
+
     scene.run(steps)
     scene.to_vid()
 
@@ -104,7 +119,8 @@ def benign(debug:bool=False):
     scene = Scene(dir_path, "benign", fps, dpi=dpi, debug=debug)
 
     # Add road
-    scene.add_actor(Road())
+    road = Road()
+    scene.add_actor(road)
 
     # NPC car
     npc = Car(pos=Point(25, 4),
@@ -119,7 +135,7 @@ def benign(debug:bool=False):
     scene.add_actor(scene.ego)
 
     # Real trajectory of ego vehicle
-    real_meas = Trajectory(scene.ego, lambda x, t: x, scene.fps)
+    real_meas = Trajectory(scene.ego)
     real_meas.MARKER_SIZE = 10
     real_meas.add_cb(FadeInOutCB(start_time=0.5))
     scene.add_actor(real_meas)
@@ -133,9 +149,8 @@ def benign(debug:bool=False):
     scene.add_actor(real_meas_legend)
 
     # MSF measurement of ego vehicle (add normal distribution errors)
-    def msf_sampling(p: Point, time: float):
-        return p + Point.nd_error(Point(0, 0), Point(.4, .4))
-    msf_meas = Trajectory(scene.ego, msf_sampling, scene.fps, .1)
+    msf_meas = Trajectory(
+        scene.ego, GetPos.gausian_meas(scale=Point(.4, .4)), .1)
     msf_meas.marker_style["color"] = "green"
     msf_meas.line_style["color"] = "green"
     msf_meas.add_cb(FadeInOutCB(start_time=1.5))
@@ -150,12 +165,26 @@ def benign(debug:bool=False):
     msf_meas_legend.add_cb(FadeInOutCB(start_time=1.5, end_time=5))
     scene.add_actor(msf_meas_legend)
 
+    # Lane detection results
+    ld_meas = LaneDetection(scene.ego, road.get_lines(), Point(10, 0),
+                            GetPos.gausian_meas(scale=Point(0, .2)))
+    ld_meas.add_cb(FadeInOutCB(start_time=2.5))
+    scene.add_actor(ld_meas)
+
+    # LD measurement annotation
+    ld_meas_legend = TrajLegend(
+        "LD", Point(25, 2),
+        text_style={"color": ld_meas.marker_style["color"]},
+        marker_style=ld_meas.marker_style)
+    ld_meas_legend.add_cb(FadeInOutCB(start_time=2.5, end_time=5))
+    scene.add_actor(ld_meas_legend)
+
     scene.run(steps)
     scene.to_vid()
 
 def main():
-    #  benign(debug=True)
-    attack(debug=True)
+    benign(debug=True)
+    #  attack(debug=True)
 
 
 if __name__ == "__main__":

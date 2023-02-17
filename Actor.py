@@ -99,12 +99,13 @@ class Actor:
         self.view = None
         self.is_done = False
         self.visible = True
+        self.alpha = 1
 
     def add_cb(self, callback: Callback) -> None:
         callback.actor = self
         self.callbacks.append(callback)
 
-    def step(self, time: float, view: Rect):
+    def step(self, time: float, view: Rect) -> None:
         self.time = time
         self.view = view
 
@@ -113,7 +114,7 @@ class Actor:
         self.callbacks = [c for c in self.callbacks if not c.is_done]
 
     def _plot(self) -> None:
-        raise Exception("Uninitialized")
+        return
 
     def plot(self) -> None:
         if self.visible:
@@ -190,9 +191,30 @@ class Car(Actor):
                   rect.righttop.x, rect.leftbottom.y, rect.righttop.y))
 
     def _plot(self) -> None:
+        super()._plot()
+
         #  plt.scatter(self.pos.x, self.pos.y)
         ax = plt.gca()
         self.attach_texture(ax)
+
+
+class GetPos:
+    def __init__(self) -> None:
+        raise("Wrong usage of class GetPos")
+
+    @ classmethod
+    def accurate_meas(cls, p: Point, time: float) -> Point:
+        return copy.deepcopy(p)
+
+    @ classmethod
+    def gausian_meas(cls, loc: Point = None, scale: Point = None) -> Point:
+        loc = loc if loc else Point(0, 0)
+        scale = scale if scale else Point(0, 0)
+
+        def _gausian_meas(p: Point, time: float) -> Point:
+            error = Point.nd_error(loc, scale)
+            return p + error
+        return _gausian_meas
 
 
 class Trajectory(Actor):
@@ -211,30 +233,28 @@ class Trajectory(Actor):
         "color": "grey",
     }
 
-    def __init__(self, car: Car, get_pos_cb, fps: int, sample_period: float = 0.05,
+    def __init__(self, car: Car, get_pos = None, sample_period: float = 0.05,
                  marker_style: dict = None, line_style: dict = None):
         super().__init__()
 
         self.trajectory = []
         self.car = car
-        self.fps = fps
         self.sample_period = sample_period
         self.last_add_pos_time = 0
         self._should_add_pos = True
-        self.alpha = 1
 
         self.marker_style = marker_style if marker_style else copy.deepcopy(
             self.DEFAULT_MARKER_STYLE)
         self.line_style = line_style if line_style else copy.deepcopy(
             self.DEFAULT_LINE_STYLE)
 
-        self._get_pos_callback = get_pos_cb
+        self._get_pos = get_pos if get_pos else GetPos.accurate_meas
 
-    def _get_pos_callback(self, pos: Point, time: float) -> Point:
+    def _get_pos(self, pos: Point, time: float) -> Point:
         raise Exception("Uninitialized")
 
     def _create_pos(self) -> Point:
-        pos = self._get_pos_callback(copy.deepcopy(self.car.pos), self.time)
+        pos = self._get_pos(copy.deepcopy(self.car.pos), self.time)
         pos.birthday = self.time
         return pos
 
@@ -268,6 +288,8 @@ class Trajectory(Actor):
         return X, Y
 
     def _plot(self) -> None:
+        super()._plot()
+
         # Plot dotted lines
         X, Y = self.getxy()
         plt.plot(X, Y, **self.line_style, alpha=self.alpha)
@@ -285,6 +307,69 @@ class Trajectory(Actor):
                         ratio, **self.marker_style, alpha=self.alpha)
 
 
+class LaneDetection(Actor):
+    car: Car
+
+    MARKER_SIZE = 60
+    DEFAULT_MARKER_STYLE = {
+        "marker": "+",
+        "color": "#40E0D0",
+    }
+
+    DEFAULT_ARROW_STYLE = {
+        "color": "#40E0D0",
+        "length_includes_head": True,
+        "width": .02,
+        "head_width": .3,
+        "head_length": .5,
+    }
+
+    def __init__(self, car: Car,  lanes: List[float], offset: Point,
+                 get_pos: callable = None, marker_style: dict = None,
+                 arrow_style: dict = None):
+        super().__init__()
+        self.car = car
+        self.lanes = lanes
+        self.offset = offset
+        self._get_pos = get_pos if get_pos else GetPos.accurate_meas
+
+        self.marker_style = marker_style if marker_style else copy.deepcopy(
+            self.DEFAULT_MARKER_STYLE)
+        self.arrow_style = arrow_style if arrow_style else copy.deepcopy(
+            self.DEFAULT_ARROW_STYLE)
+
+    def _get_pos(self, pos: Point, time: float) -> Point:
+        raise Exception("Uninitialized")
+
+    def find_adjecent_lanes(self, y: float) -> Tuple(float, float):
+        bigger = [l for l in self.lanes if l >= y]
+        smaller = [l for l in self.lanes if l < y]
+
+        upper_first = min(bigger) if bigger else None
+        lower_first = max(smaller) if smaller else None
+
+        return upper_first, lower_first
+
+    def _plot(self) -> None:
+        super()._plot()
+
+        upper, lower = self.find_adjecent_lanes(self.car.pos.y)
+        mpos = self._get_pos(self.car.pos, self.time) + self.offset
+
+        if upper is not None and lower is not None:
+            # Draw marker
+            plt.scatter(mpos.x, mpos.y, s=self.MARKER_SIZE,
+                        **self.marker_style)
+
+            # TODO: Draw arrows to lane lines
+            upper_arrow_y = mpos.y + .5
+            lower_arrow_y = mpos.y - .5
+            plt.arrow(mpos.x, upper_arrow_y, 0, upper -
+                      upper_arrow_y, alpha=self.alpha, **self.arrow_style)
+            plt.arrow(mpos.x, lower_arrow_y, 0, lower -
+                      lower_arrow_y, alpha=self.alpha, **self.arrow_style)
+
+
 class Road(Actor):
     def __init__(self):
         super().__init__(1)
@@ -296,8 +381,8 @@ class Road(Actor):
         self.dashed_lines = [2]  # y
         self.solid_lines = [-2, 6]  # y
 
-    def step(self, time: float, view: Rect) -> None:
-        super().step(time, view)
+    def get_lines(self) -> List[float]:
+        return self.dashed_lines + self.solid_lines
 
     def line_in_view(self, y: float, top: float, bottom: float) -> bool:
         return (y - self.line_width/2 < top) and (y + self.line_width/2 > bottom)
@@ -325,6 +410,8 @@ class Road(Actor):
             start = end + self.dashed_line[1]
 
     def _plot(self) -> None:
+        super()._plot()
+
         left, right = self.view.leftbottom.x, self.view.righttop.x
         bottom, top = self.view.leftbottom.y, self.view.righttop.y
 
@@ -348,19 +435,17 @@ class Text(Actor):
         self.text_style = text_style if text_style else {}
 
         self.time = 0
-        self.alpha = 1
-
-    def step(self, time: float, view: Rect) -> None:
-        super().step(time, view)
 
     def _plot(self) -> None:
+        super()._plot()
+
         pos = self.text_pos + self.view.leftbottom
         plt.text(pos.x, pos.y, self.text, verticalalignment="center",
                  alpha=self.alpha, size=self.FONT_SIZE, **self.text_style)
 
 
 class TrajLegend(Text):
-    MARKER_SIZE = 100
+    MARKER_SIZE = 120
 
     def __init__(self, text: str, pos: Point, text_style: dict = None,
                  marker_style: dict = None):
@@ -368,13 +453,11 @@ class TrajLegend(Text):
         super().__init__(text, text_pos, text_style)
 
         self.marker_pos = pos
-        self.marker_style = marker_style if marker_style else {}
-
-    def step(self, time: float, view: Rect) -> None:
-        super().step(time, view)
+        self.marker_style = copy.deepcopy(marker_style) if marker_style else {}
 
     def _plot(self) -> None:
         super()._plot()
+
         pos = self.marker_pos + self.view.leftbottom
-        plt.scatter(pos.x, pos.y, s=120, alpha=self.alpha,
+        plt.scatter(pos.x, pos.y, s=self.MARKER_SIZE, alpha=self.alpha,
                     **self.marker_style)
