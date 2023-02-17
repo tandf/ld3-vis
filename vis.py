@@ -15,7 +15,7 @@ dir_path = os.path.dirname(os.path.realpath(__file__))
 def attack(debug:bool=False):
     fps = 10 if debug else 60
     dpi = 100
-    steps = 30 if debug else 500
+    steps = 50 if debug else 500
     out_dir = os.path.join(dir_path, "attack")
 
     scene = Scene(out_dir, fps, dpi=dpi, debug=debug)
@@ -61,7 +61,7 @@ def attack(debug:bool=False):
 def benign(debug:bool=False):
     fps = 10 if debug else 60
     dpi = 100
-    steps = 30 if debug else 500
+    steps = 50 if debug else 500
     out_dir = os.path.join(dir_path, "benign")
 
     scene = Scene(out_dir, fps, dpi=dpi, debug=debug)
@@ -84,13 +84,15 @@ def benign(debug:bool=False):
     # Real trajectory of ego vehicle
     real_meas = Trajectory(scene.ego, lambda x: x, scene.fps)
     real_meas.MARKER_SIZE = 10
+    real_meas.add_cb(FadeInOutCB(start_time=0.5))
     scene.add_actor(real_meas)
 
     # Real trajectory annotation
     real_meas_legend = TrajLegend(
-        "Ground truth", Point(30, 5), start_time = 0.5, end_time=5,
+        "Ground truth", Point(30, 5),
         text_style={"color": real_meas.marker_style["color"]},
         marker_style=real_meas.marker_style)
+    real_meas_legend.add_cb(FadeInOutCB(start_time=0.5, end_time=5))
     scene.add_actor(real_meas_legend)
 
     # GPS measurement of ego vehicle (add normal distribution errors)
@@ -99,14 +101,16 @@ def benign(debug:bool=False):
     gps_meas = Trajectory(scene.ego, gps_sampling, scene.fps, .1)
     gps_meas.marker_style["color"] = "green"
     gps_meas.line_style["color"] = "green"
+    gps_meas.add_cb(FadeInOutCB(start_time=1.5))
     scene.add_actor(gps_meas)
     egoController.traj = gps_meas
 
     # GPS measurement annotation
     gps_meas_legend = TrajLegend(
-        "Localization", Point(30, 3.5), start_time = 0.5, end_time=5,
+        "Localization", Point(30, 3.5),
         text_style={"color": gps_meas.marker_style["color"]},
         marker_style=gps_meas.marker_style)
+    gps_meas_legend.add_cb(FadeInOutCB(start_time=1.5, end_time=5))
     scene.add_actor(gps_meas_legend)
 
     scene.run(steps)

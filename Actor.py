@@ -3,7 +3,7 @@ from PIL import Image
 from io import BytesIO
 from matplotlib.patches import Rectangle
 from scipy import ndimage
-from typing import Tuple, List
+from typing import List
 import cairosvg
 import copy
 import matplotlib.pyplot as plt
@@ -12,24 +12,96 @@ import numpy as np
 from Point import *
 
 
+class Callback:
+    actor: Actor
+
+    def __init__(self) -> None:
+        self.actor = None
+        self.time = 0
+        self.view = Rect(Point(0, 0), Point(0, 0))
+        self.is_done = False
+
+    def step(self, time: float, view: Rect) -> None:
+        self.time = time
+        self.view = view
+
+class DeleteAfterDisappearCB(Callback):
+    def __init__(self) -> None:
+        super().__init__()
+        self.in_once = False
+
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+
+        if self.actor.visible:
+            self.in_once = True
+        elif self.in_once:
+            self.is_done = True
+            self.actor.is_done = True
+
+
+class FadeInOutCB(Callback):
+    def __init__(self, start_time: float = 0, end_time: float = float("inf"),
+                 fadein_time: float = 1, fadeout_time: float = 1) -> None:
+        super().__init__()
+        self.start_time = start_time
+        self.end_time = end_time
+        self.fadein_time = fadein_time
+        self.fadeout_time = fadeout_time
+
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+        self.actor.alpha = min(
+            (self.time - self.start_time) / self.fadein_time,
+            (self.end_time - self.time) / self.fadeout_time,
+            1)
+
+        self.actor.visible = self.time >= self.start_time \
+            and self.time <= self.end_time
+        if self.time > self.end_time:
+            self.is_done = True
+            self.actor.is_done = True
+
+
 class Actor:
     priority: int
+    callbacks: List[Callback]  # For actor animation
+    time: float
+    is_done: bool
 
     def __init__(self, priority: int = 50):
         self.priority = priority
+        self.callbacks = []
+        self.time = 0
+        self.view = None
+        self.is_done = False
+        self.visible = True
 
-    def step(self, dt: float):
+    def add_cb(self, callback: Callback) -> None:
+        callback.actor = self
+        self.callbacks.append(callback)
+
+    def step(self, time: float, view: Rect):
+        self.time = time
+        self.view = view
+
+        for callback in self.callbacks:
+            callback.step(time, view)
+        self.callbacks = [c for c in self.callbacks if not c.is_done]
+
+    def _plot(self) -> None:
         raise Exception("Uninitialized")
 
-    def plot(self, view: Rect):
-        raise Exception("Uninitialized")
+    def plot(self) -> None:
+        if self.visible:
+            self._plot()
 
     def done(self) -> bool:
-        return False
+        return self.is_done
 
 
 class Car(Actor):
-    def __init__(self, controller, pos: Point = None):
+    def __init__(self, controller, pos: Point = None, appear_once = True):
         super().__init__(90)
 
         self.controller = controller
@@ -39,8 +111,8 @@ class Car(Actor):
         self.texture = None
         self.texture_rotate = False
 
-        self.in_once = False
-        self.is_done = False
+        if appear_once:
+            self.add_cb(DeleteAfterDisappearCB())
 
     def load_texture(self, file: str = "pics/car-top.svg",
                      heading: str = "right") -> Image.Image:
@@ -52,7 +124,12 @@ class Car(Actor):
             img = img.transpose(Image.ROTATE_90)
         self.texture = img
 
-    def step(self, dt: float) -> None:
+    def step(self, time: float, view: Rect) -> None:
+        dt = time - self.time
+        self.visible = self.in_view(view)
+
+        super().step(time, view)
+
         speed = self.controller.get_speed()
         assert speed, "Uninitialized controller!"
         if speed.x > 30:
@@ -89,17 +166,10 @@ class Car(Actor):
         ax.imshow(texture, extent=(rect.leftbottom.x,
                   rect.righttop.x, rect.leftbottom.y, rect.righttop.y))
 
-    def plot(self, view: Rect) -> None:
-        if self.in_view(view):
-            #  plt.scatter(self.pos.x, self.pos.y)
-            self.in_once = True
-            ax = plt.gca()
-            self.attach_texture(ax)
-        elif self.in_once:
-            self.is_done = True
-
-    def done(self) -> bool:
-        return self.is_done
+    def _plot(self) -> None:
+        #  plt.scatter(self.pos.x, self.pos.y)
+        ax = plt.gca()
+        self.attach_texture(ax)
 
 
 class Trajectory(Actor):
@@ -127,6 +197,7 @@ class Trajectory(Actor):
         self.fps = fps
         self.sample_period = sample_period
         self.time = 0
+        self.alpha = 1
 
         self.marker_style = marker_style if marker_style else copy.deepcopy(
             self.DEFAULT_MARKER_STYLE)
@@ -143,8 +214,12 @@ class Trajectory(Actor):
         pos.frame_cnt = 0
         self.trajectory.append(pos)
 
-    def step(self, dt: float) -> None:
-        self.time += dt
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+
+        # Remove outdated points
+        self._update_pos(self.view)
+
         if self.time >= self.sample_period:
             self._add_pos()
             self.time -= self.sample_period
@@ -168,18 +243,15 @@ class Trajectory(Actor):
         Y = [p.y for p in trajectory]
         return X, Y
 
-    def plot(self, view: Rect) -> None:
-        # Remove outdated points
-        self._update_pos(view)
-
+    def _plot(self) -> None:
         # Plot dotted lines
         X, Y = self.getxy()
-        plt.plot(X, Y, **self.line_style)
+        plt.plot(X, Y, **self.line_style, alpha=self.alpha)
 
         old_trajectory = [p for p in self.trajectory
                           if p.frame_cnt / self.fps > self.ANIMATION_TIME]
         X, Y = self.getxy(old_trajectory)
-        plt.scatter(X, Y, s=self.MARKER_SIZE, **self.marker_style)
+        plt.scatter(X, Y, s=self.MARKER_SIZE, **self.marker_style, alpha=self.alpha)
 
         new_trajectory = [p for p in self.trajectory
                           if p.frame_cnt / self.fps <= self.ANIMATION_TIME]
@@ -187,7 +259,7 @@ class Trajectory(Actor):
             frame_cnt = p.frame_cnt
             ratio = 1 + 7 * (1 - frame_cnt / self.fps / self.ANIMATION_TIME)
             plt.scatter(p.x, p.y, s=self.MARKER_SIZE *
-                        ratio, **self.marker_style)
+                        ratio, **self.marker_style, alpha=self.alpha)
 
 
 class Road(Actor):
@@ -201,8 +273,8 @@ class Road(Actor):
         self.dashed_lines = [2]  # y
         self.solid_lines = [-2, 6]  # y
 
-    def step(self, dt: float) -> None:
-        pass  # Lane lines don't move
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
 
     def line_in_view(self, y: float, top: float, bottom: float) -> bool:
         return (y - self.line_width/2 < top) and (y + self.line_width/2 > bottom)
@@ -229,9 +301,9 @@ class Road(Actor):
                          end - start, self.line_width))
             start = end + self.dashed_line[1]
 
-    def plot(self, view: Rect) -> None:
-        left, right = view.leftbottom.x, view.righttop.x
-        bottom, top = view.leftbottom.y, view.righttop.y
+    def _plot(self) -> None:
+        left, right = self.view.leftbottom.x, self.view.righttop.x
+        bottom, top = self.view.leftbottom.y, self.view.righttop.y
 
         for line in self.solid_lines:
             if self.line_in_view(line, top, bottom):
@@ -243,60 +315,43 @@ class Road(Actor):
 
 
 class Text(Actor):
-    FADEIN_TIME = 1
-    FADEOUT_TIME = 1
-
     FONT_SIZE = 14
 
-    def __init__(self, text: str, pos: Point, start_time: float = 0,
-                 end_time: float = float("inf"), text_style: dict = None):
+    def __init__(self, text: str, pos: Point, text_style: dict = None):
         super().__init__(99)
 
         self.text = text
         self.text_pos = pos
-        self.start_time = start_time
-        self.end_time = end_time
         self.text_style = text_style if text_style else {}
 
         self.time = 0
+        self.alpha = 1
 
-    def step(self, dt: float):
-        self.time += dt
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
 
-    def visible(self) -> bool:
-        return self.time >= self.start_time and self.time <= self.end_time
+    def _plot(self) -> None:
+        pos = self.text_pos + self.view.leftbottom
+        plt.text(pos.x, pos.y, self.text, verticalalignment="center",
+                 alpha=self.alpha, size=self.FONT_SIZE, **self.text_style)
 
-    def plot(self, view: Rect):
-        if self.visible():
-            self.alpha = min(
-                1,
-                (self.time - self.start_time) / self.FADEIN_TIME,
-                (self.end_time - self.time) / self.FADEOUT_TIME)
-            pos = self.text_pos + view.leftbottom
-            plt.text(pos.x, pos.y, self.text, verticalalignment="center",
-                     alpha=self.alpha, size=self.FONT_SIZE, **self.text_style)
-
-    def done(self) -> bool:
-        return self.time > self.end_time
 
 class TrajLegend(Text):
     MARKER_SIZE = 100
 
-    def __init__(self, text: str, pos: Point, start_time: float = 0,
-                 end_time: float = float("inf"), text_style: dict = None,
+    def __init__(self, text: str, pos: Point, text_style: dict = None,
                  marker_style: dict = None):
         text_pos = pos + Point(1, 0)
-        super().__init__(text, text_pos, start_time, end_time, text_style)
+        super().__init__(text, text_pos, text_style)
 
         self.marker_pos = pos
         self.marker_style = marker_style if marker_style else {}
 
-    def step(self, dt: float):
-        super().step(dt)
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
 
-    def plot(self, view: Rect):
-        super().plot(view)
-        if self.visible():
-            pos = self.marker_pos + view.leftbottom
-            plt.scatter(pos.x, pos.y, s=120, alpha=self.alpha,
-                        **self.marker_style)
+    def _plot(self) -> None:
+        super()._plot()
+        pos = self.marker_pos + self.view.leftbottom
+        plt.scatter(pos.x, pos.y, s=120, alpha=self.alpha,
+                    **self.marker_style)

@@ -58,6 +58,7 @@ class Scene:
         self.fps = fps
         self.cnt = 0
         self.time = 0
+        self.view = None
         self.fig_size = fig_size
         self.dpi = dpi
 
@@ -82,17 +83,15 @@ class Scene:
         self.actors.sort(key=lambda a: a.priority)
 
     def plot(self) -> None:
-        view = self.camera.get_view(self.ego)
-
         f = plt.figure(figsize=self.fig_size, dpi=self.dpi)
-        plt.xlim(view.leftbottom.x, view.righttop.x)
-        plt.ylim(view.leftbottom.y, view.righttop.y)
+        plt.xlim(self.view.leftbottom.x, self.view.righttop.x)
+        plt.ylim(self.view.leftbottom.y, self.view.righttop.y)
         ax = plt.gca()
         for spine in ax.spines.values():
             spine.set_visible(False)
 
         for actor in self.actors:
-            actor.plot(view=view)
+            actor.plot()
 
         if self.debug:
             plt.title(f"{self.time:.1f} s")
@@ -105,20 +104,27 @@ class Scene:
         f.savefig(os.path.join(self.out_dir, filename))
         plt.close(f)
 
-    def step(self) -> None:
-        dt = 1 / self.fps * self.speed_factor
+    def step(self, time: float = None) -> None:
+        if time:
+            self.time = time
+        else:
+            dt = 1 / self.fps * self.speed_factor
+            self.time += dt
+            self.cnt += 1
+
+        self.view = self.camera.get_view(self.ego)
 
         for actor in self.actors:
-            actor.step(dt)
+            actor.step(self.time, self.view)
+            if self.debug and actor.done():
+                print(f"remove {actor}")
         self.actors = [a for a in self.actors if not a.done()]
 
-        # Finishing
-        self.time += dt
-        self.cnt += 1
-
     def run(self, steps: int) -> None:
+        self.step(0)  # init
+
         with alive_bar(steps) as bar:
-            for i in range(steps):
+            for _ in range(steps):
                 self.plot()
                 self.step()
                 bar()
