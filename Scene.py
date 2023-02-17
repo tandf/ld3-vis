@@ -44,10 +44,12 @@ class Scene:
     actors: List[Actor]
     ego: Car
 
-    def __init__(self, out_dir, fps: int = 60, speed_factor: float = 1,
-                 fig_size: Tuple[int, int] = (8, 6), dpi: int = 100,
-                 debug=False):
-        self.out_dir = out_dir
+    def __init__(self, root_dir: str, name: str, fps: int = 60,
+                 speed_factor: float = 1, fig_size: Tuple[int, int] = (8, 6),
+                 dpi: int = 100, debug=False):
+        self.root_dir = root_dir
+        self.out_dir = os.path.join(root_dir, name)
+        self.name = name
 
         if os.path.isdir(self.out_dir):
             shutil.rmtree(self.out_dir)
@@ -123,13 +125,16 @@ class Scene:
     def run(self, steps: int) -> None:
         self.step(0)  # init
 
-        with alive_bar(steps) as bar:
+        with alive_bar(steps, title=self.name) as bar:
             for _ in range(steps):
                 self.plot()
                 self.step()
                 bar()
 
-    def to_vid(self, file: str) -> None:
+    def to_vid(self, file: str = None) -> None:
+        if not file:
+            file = f"{self.name}.mp4"
+
         cmd = [f"ffmpeg -y",
                f"-framerate {self.fps}",
                f"-i {os.path.join(self.out_dir, '%06d.png')}",

@@ -39,8 +39,7 @@ class DeleteAfterDisappearCB(Callback):
             self.is_done = True
             self.actor.is_done = True
 
-
-class FadeInOutCB(Callback):
+class PeriodCB(Callback):
     def __init__(self, start_time: float = 0, end_time: float = float("inf"),
                  fadein_time: float = 1, fadeout_time: float = 1) -> None:
         super().__init__()
@@ -49,18 +48,42 @@ class FadeInOutCB(Callback):
         self.fadein_time = fadein_time
         self.fadeout_time = fadeout_time
 
+    def _step(self) -> None:
+        return
+
     def step(self, time: float, view: Rect) -> None:
         super().step(time, view)
+        if self.time > self.end_time:
+            self.is_done = True
+        self._step()
+
+
+class FadeInOutCB(PeriodCB):
+    def __init__(self, start_time: float = 0, end_time: float = float("inf"),
+                 fadein_time: float = 1, fadeout_time: float = 1) -> None:
+        super().__init__(start_time, end_time, fadein_time, fadeout_time)
+
+    def _step(self) -> None:
         self.actor.alpha = min(
             (self.time - self.start_time) / self.fadein_time,
             (self.end_time - self.time) / self.fadeout_time,
             1)
-
         self.actor.visible = self.time >= self.start_time \
             and self.time <= self.end_time
         if self.time > self.end_time:
-            self.is_done = True
             self.actor.is_done = True
+
+
+class TrajAddPosLifecycleCB(PeriodCB):
+    actor: Trajectory
+
+    def __init__(self, start_time: float = 0, end_time: float = float("inf"),
+                 fadein_time: float = 1, fadeout_time: float = 1) -> None:
+        super().__init__(start_time, end_time, fadein_time, fadeout_time)
+
+    def _step(self) -> None:
+        self.actor._should_add_pos = self.time >= self.start_time \
+            and self.time <= self.end_time
 
 
 class Actor:
@@ -196,7 +219,8 @@ class Trajectory(Actor):
         self.car = car
         self.fps = fps
         self.sample_period = sample_period
-        self.time = 0
+        self.last_add_pos_time = 0
+        self._should_add_pos = True
         self.alpha = 1
 
         self.marker_style = marker_style if marker_style else copy.deepcopy(
@@ -206,13 +230,13 @@ class Trajectory(Actor):
 
         self._get_pos_callback = get_pos_cb
 
-    def _get_pos_callback(self, pos: Point) -> Point:
+    def _get_pos_callback(self, pos: Point, time: float) -> Point:
         raise Exception("Uninitialized")
 
-    def _add_pos(self) -> None:
-        pos = self._get_pos_callback(copy.deepcopy(self.car.pos))
-        pos.frame_cnt = 0
-        self.trajectory.append(pos)
+    def _create_pos(self) -> Point:
+        pos = self._get_pos_callback(copy.deepcopy(self.car.pos), self.time)
+        pos.birthday = self.time
+        return pos
 
     def step(self, time: float, view: Rect) -> None:
         super().step(time, view)
@@ -220,9 +244,11 @@ class Trajectory(Actor):
         # Remove outdated points
         self._update_pos(self.view)
 
-        if self.time >= self.sample_period:
-            self._add_pos()
-            self.time -= self.sample_period
+        if self.time - self.last_add_pos_time >= self.sample_period:
+            pos = self._create_pos()
+            self.last_add_pos_time += self.sample_period
+            if self._should_add_pos:
+                self.trajectory.append(pos)
 
     def _update_pos(self, view: Rect) -> None:
         # Remove trajectories out of view
@@ -234,8 +260,6 @@ class Trajectory(Actor):
 
         self.trajectory = [p for idx, p in enumerate(
             self.trajectory) if idx + 1 >= first_idx]
-        for p in self.trajectory:
-            p.frame_cnt += 1
 
     def getxy(self, trajectory: List[Point] = None) -> None:
         trajectory = trajectory if trajectory else self.trajectory
@@ -249,15 +273,14 @@ class Trajectory(Actor):
         plt.plot(X, Y, **self.line_style, alpha=self.alpha)
 
         old_trajectory = [p for p in self.trajectory
-                          if p.frame_cnt / self.fps > self.ANIMATION_TIME]
+                          if self.time - p.birthday > self.ANIMATION_TIME]
         X, Y = self.getxy(old_trajectory)
         plt.scatter(X, Y, s=self.MARKER_SIZE, **self.marker_style, alpha=self.alpha)
 
         new_trajectory = [p for p in self.trajectory
-                          if p.frame_cnt / self.fps <= self.ANIMATION_TIME]
+                          if self.time - p.birthday <= self.ANIMATION_TIME]
         for p in new_trajectory:
-            frame_cnt = p.frame_cnt
-            ratio = 1 + 7 * (1 - frame_cnt / self.fps / self.ANIMATION_TIME)
+            ratio = 1 + 7 * (1 - (self.time - p.birthday) / self.ANIMATION_TIME)
             plt.scatter(p.x, p.y, s=self.MARKER_SIZE *
                         ratio, **self.marker_style, alpha=self.alpha)
 
