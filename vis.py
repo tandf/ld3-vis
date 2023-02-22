@@ -19,7 +19,7 @@ if not os.path.isdir(video_dir):
 def scene1(debug: bool = False, high_quality: bool = False):
     duration = 18  # seconds
     fps = 60 if high_quality else 10
-    dpi = 100 if high_quality else 54
+    dpi = 100
 
     scene = Scene(video_dir, "scene1", duration, fps, dpi=dpi, debug=debug)
 
@@ -185,6 +185,32 @@ def scene1(debug: bool = False, high_quality: bool = False):
     real_meas_legend.MARKER_SIZE = 120
     real_meas_legend.add_cb(FadeInOutCB(real_start_time))
     scene.add_actor(real_meas_legend)
+
+    # Attacker image
+    attacker = Image("pics/attacker.png", Point(23, 13), w=3, h=3)
+    attacker.texture.image_style["zorder"] = 99
+    attacker.add_cb(ImageGrow(gps_attack_start_time-.2, gps_attack_start_time))
+    scene.add_actor(attacker)
+
+    # Signal image
+    spoofing_signal = Image(
+        "pics/signal.png", Point(20.5, 10.5), w=4, h=4, rotate_degree=135)
+    spoofing_signal.texture.image_style["zorder"] = 99
+    spoofing_signal.add_cb(
+        ImageGrow(gps_attack_start_time, gps_attack_start_time+.2))
+    scene.add_actor(spoofing_signal)
+
+    # GPS Spoofing text
+    gps_spoofing_text = Text("GPS spoofing", Point(22, 10.5))
+    gps_spoofing_text.text_style["color"] = "red"
+    gps_spoofing_text.add_cb(FadeInOutCB(gps_attack_start_time))
+    scene.add_actor(gps_spoofing_text)
+
+    # Crash image
+    crash = Image("pics/crash.png", Point(17, 7), 4, 4)
+    crash.texture.image_style["zorder"] = 99
+    crash.add_cb(ImageGrow(17.8, 18))
+    scene.add_actor(crash)
 
     #  ld_start_time = 10
     #  # Lane detection results

@@ -11,6 +11,7 @@ import numpy as np
 import math
 
 from Point import *
+from Texture import Texture
 
 
 class Callback:
@@ -106,6 +107,22 @@ class TextTypingCB(PeriodCB):
             if text and text_length < len(self.text):
                 text += "_"
             self.actor.text = text
+            
+
+class ImageGrow(PeriodCB):
+    actor: Image
+
+    def __init__(self, start_time: float = 0,
+                 end_time: float = float("inf")) -> None:
+        super().__init__(start_time, end_time)
+
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+        if self.time < self.start_time:
+            self.actor.visible = False
+        else:
+            self.actor.visible = True
+        self.actor.rect = self.actor.get_rect(self.progress)
 
 
 class ActionCB(Callback):
@@ -189,6 +206,8 @@ class ActorList(Actor):
 
 
 class Car(Actor):
+    texture: Texture
+
     def __init__(self, controller, pos: Point = None, appear_once = True):
         super().__init__(90)
 
@@ -203,14 +222,12 @@ class Car(Actor):
             self.add_cb(DeleteAfterDisappearCB())
 
     def load_texture(self, file: str = "pics/car-top.svg",
-                     heading: str = "right") -> Image.Image:
-        png = cairosvg.svg2png(url=file)
-        img = Image.open(BytesIO(png))
+                     heading: str = "right") -> None:
         if heading == "right":
-            img = img.transpose(Image.ROTATE_270)
-        else:
-            img = img.transpose(Image.ROTATE_90)
-        self.texture = img
+            rotate = 3
+        elif heading == "left":
+            rotate = 1
+        self.texture = Texture(file, rotate)
 
     def step(self, time: float, view: Rect) -> None:
         dt = time - self.time
@@ -240,26 +257,22 @@ class Car(Actor):
         rect = self.get_rect()
         return rect.leftbottom in view or rect.righttop in view
 
-    def attach_texture(self, ax) -> None:
+    def attach_texture(self) -> None:
         if not self.texture:
             return
 
-        if self.texture_rotate:
-            # TODO: get the correct extent
-            texture = ndimage.rotate(self.texture, self.direction)
-        else:
-            texture = self.texture
-
+        direction = self.direction if self.texture_rotate else None
+        # TODO: get the correct extent based on direction
         rect = self.get_rect()
-        ax.imshow(texture, extent=(rect.leftbottom.x,
-                  rect.righttop.x, rect.leftbottom.y, rect.righttop.y))
+        if self.texture_rotate:
+            self.texture.rotate_to(direction)
+        self.texture.draw(rect)
 
     def _plot(self) -> None:
         super()._plot()
 
         #  plt.scatter(self.pos.x, self.pos.y)
-        ax = plt.gca()
-        self.attach_texture(ax)
+        self.attach_texture()
 
 
 class GetPos:
@@ -630,3 +643,29 @@ class PolyLine(Actor):
         plt.arrow(arrow_line.start.x, arrow_line.start.y, arrow_line.delta.x,
                   arrow_line.delta.y, alpha=self.alpha,
                   **{**self.arrow_style, **self.line_style})
+
+
+class Image(Actor):
+    texture: Texture
+
+    def __init__(self, file: str, center: Point, w: float, h: float,
+                 rotate: int = None, image_style: dict = None,
+                 rotate_degree: float = None, priority: int = 50) -> None:
+        super().__init__(priority)
+        self.texture = Texture(file, rotate, rotate_degree, image_style)
+        self.center = center
+        self.w = w
+        self.h = h
+
+        self.rect = self.get_rect()
+
+    def get_rect(self, shrink: float = None) -> Rect:
+        w = self.w * shrink if shrink else self.w
+        h = self.h * shrink if shrink else self.h
+        leftbottom = Point(self.center.x - w/2, self.center.y - h/2)
+        righttop = Point(self.center.x + w/2, self.center.y + h/2)
+        return Rect(leftbottom, righttop)
+
+    def _plot(self) -> None:
+        super()._plot()
+        self.texture.draw(self.rect + self.view.leftbottom)

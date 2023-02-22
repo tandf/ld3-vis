@@ -78,3 +78,12 @@ class Rect:
         assert(isinstance(p, Point))
         return p.x > self.leftbottom.x and p.x < self.righttop.x and \
             p.y > self.leftbottom.y and p.y < self.righttop.y
+
+    def __add__(self, shift: Point) -> Rect:
+        return Rect(self.leftbottom + shift, self.righttop + shift)
+
+    def __str__(self) -> str:
+        return f"lb: {self.leftbottom}, rt: {self.righttop}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
