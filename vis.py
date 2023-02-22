@@ -10,6 +10,10 @@ from Controller import *
 
 
 dir_path = os.path.dirname(os.path.realpath(__file__))
+video_dir = os.path.join(dir_path, "videos")
+
+if not os.path.isdir(video_dir):
+    os.mkdir(video_dir)
 
 
 def scene1(debug: bool = False):
@@ -19,7 +23,7 @@ def scene1(debug: bool = False):
     dpi = 100
     steps = fps * duration
 
-    scene = Scene(dir_path, "scene1", fps, dpi=dpi, debug=debug)
+    scene = Scene(video_dir, "scene1", fps, dpi=dpi, debug=debug)
 
     # Add road
     road = Road()
@@ -70,33 +74,25 @@ def scene1(debug: bool = False):
     gps_attack_start_time = 10
     # GPS measurement annotation
     gps_meas_legend = TrajLegend(
-        "GPS", Point(2, 13),
-        text_style={"color": gps_meas.marker_style["color"]},
-        marker_style=gps_meas.marker_style)
+        "GPS", Point(2, 13), marker_style=gps_meas.marker_style)
     gps_meas_legend.add_cb(FadeInOutCB(gps_start_time, gps_attack_start_time))
     scene.add_actor(gps_meas_legend)
 
     gps_attack_meas_legend = TrajLegend(
-        "GPS", Point(2, 13),
-        text_style={"color": "red"},
-        marker_style=gps_meas.marker_style)
+        "GPS", Point(2, 13), marker_style=gps_meas.marker_style)
     gps_attack_meas_legend.marker_style["color"] = "red"
     gps_attack_meas_legend.add_cb(FadeInOutCB(gps_attack_start_time))
     scene.add_actor(gps_attack_meas_legend)
 
     # LiDAR measurement annotation
     lidar_meas_legend = TrajLegend(
-        "LiDAR", Point(2, 12),
-        text_style={"color": lidar_meas.marker_style["color"]},
-        marker_style=lidar_meas.marker_style)
+        "LiDAR", Point(2, 12), marker_style=lidar_meas.marker_style)
     lidar_meas_legend.add_cb(FadeInOutCB(lidar_start_time))
     scene.add_actor(lidar_meas_legend)
 
     # IMU measurement annotation
     imu_meas_legend = TrajLegend(
-        "IMU", Point(2, 11),
-        text_style={"color": imu_meas.marker_style["color"]},
-        marker_style=imu_meas.marker_style)
+        "IMU", Point(2, 11), marker_style=imu_meas.marker_style)
     imu_meas_legend.add_cb(FadeInOutCB(imu_start_time))
     scene.add_actor(imu_meas_legend)
 
@@ -114,9 +110,7 @@ def scene1(debug: bool = False):
 
     # MSF measurement annotation
     msf_meas_legend = TrajLegend(
-        "MSF", Point(9, 12),
-        text_style={"color": msf_meas.marker_style["color"]},
-        marker_style=msf_meas.marker_style)
+        "MSF", Point(9, 12), marker_style=msf_meas.marker_style)
     msf_meas_legend.add_cb(FadeInOutCB(msf_start_time, gps_attack_effect_time))
     scene.add_actor(msf_meas_legend)
 
@@ -144,9 +138,7 @@ def scene1(debug: bool = False):
 
     # MSF measurement annotation
     attack_meas_legend = TrajLegend(
-        "MSF", Point(9, 12),
-        text_style={"color": "red"},
-        marker_style=msf_meas.marker_style)
+        "MSF", Point(9, 12), marker_style=msf_meas.marker_style)
     attack_meas_legend.marker_style["color"] = "red"
     attack_meas_legend.add_cb(FadeInOutCB(gps_attack_effect_time))
     scene.add_actor(attack_meas_legend)
@@ -184,9 +176,7 @@ def scene1(debug: bool = False):
 
     # Real trajectory annotation
     real_meas_legend = TrajLegend(
-        "Ground truth", Point(9, 13),
-        text_style={"color": real_meas.marker_style["color"]},
-        marker_style=real_meas.marker_style)
+        "Ground truth", Point(9, 13), marker_style=real_meas.marker_style)
     real_meas_legend.MARKER_SIZE = 60
     real_meas_legend.add_cb(FadeInOutCB(real_start_time))
     scene.add_actor(real_meas_legend)
@@ -200,17 +190,22 @@ def scene1(debug: bool = False):
 
     # LD measurement annotation
     ld_meas_legend = TrajLegend(
-        "LD", Point(9, 11),
-        text_style={"color": ld_meas.marker_style["color"]},
-        marker_style=ld_meas.marker_style)
+        "LD", Point(9, 11), marker_style=ld_meas.marker_style)
     ld_meas_legend.add_cb(FadeInOutCB(ld_start_time))
     scene.add_actor(ld_meas_legend)
+
+    titles = Titles([
+        ("Multi-Sensor Fusion (MSF)", 0, gps_attack_start_time),
+        ("FusionRipper attack", gps_attack_start_time, 15),
+        ], Point(0, scene.camera.limits.y))
+    scene.add_actor(titles)
 
     scene.run(steps)
     scene.to_vid()
 
 def main():
-    scene1(debug=False)
+    debug = False
+    scene1(debug)
 
 
 if __name__ == "__main__":

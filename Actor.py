@@ -8,6 +8,7 @@ import cairosvg
 import copy
 import matplotlib.pyplot as plt
 import numpy as np
+import math
 
 from Point import *
 
@@ -46,15 +47,14 @@ class PeriodCB(Callback):
         super().__init__()
         self.start_time = start_time
         self.end_time = end_time
-
-    def _step(self) -> None:
-        return
+        self.progress = 0
 
     def step(self, time: float, view: Rect) -> None:
         super().step(time, view)
+        self.progress = (self.time - self.start_time) / \
+            (self.end_time - self.start_time)
         if self.time > self.end_time:
             self.is_done = True
-        self._step()
 
 
 class FadeInOutCB(PeriodCB):
@@ -64,7 +64,8 @@ class FadeInOutCB(PeriodCB):
         self.fadein_time = fadein_time
         self.fadeout_time = fadeout_time
 
-    def _step(self) -> None:
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
         self.actor.alpha = min(
             (self.time - self.start_time) / self.fadein_time,
             (self.end_time - self.time) / self.fadeout_time,
@@ -82,26 +83,45 @@ class TrajAddPosLifecycleCB(PeriodCB):
                  end_time: float = float("inf")) -> None:
         super().__init__(start_time, end_time)
 
-    def _step(self) -> None:
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
         self.actor._should_add_pos = self.time >= self.start_time \
             and self.time <= self.end_time
 
 
-class ActionCB(PeriodCB):
-    actor: Actor
+class TextTypingCB(PeriodCB):
+    actor: Text
 
+    def __init__(self, text: str, start_time: float = 0,
+                 end_time: float = float("inf")) -> None:
+        super().__init__(start_time, end_time)
+        self.text = text
+
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+
+        if self.time >= self.start_time:
+            text_length = math.floor(len(self.text) * self.progress)
+            text = self.text[:text_length]
+            if text and text_length < len(self.text):
+                text += "_"
+            self.actor.text = text
+
+
+class ActionCB(Callback):
     def __init__(self, action: callable, action_time: float) -> None:
         super().__init__(0, action_time)
+        self.action_time = action_time
         self._action = action
 
     def _action(self, actor:Actor) -> None:
         return
 
-    def _step(self) -> None:
-        if self.time > self.end_time:
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+        if self.time > self.action_time:
             self._action(self.actor)
-        self.actor._should_add_pos = self.time >= self.start_time \
-            and self.time <= self.end_time
+            self.is_done = True
 
 
 class Actor:
@@ -110,7 +130,7 @@ class Actor:
     time: float
     is_done: bool
 
-    def __init__(self, priority: int = 50):
+    def __init__(self, priority: int = 50) -> None:
         self.priority = priority
         self.callbacks = []
         self.time = 0
@@ -140,6 +160,32 @@ class Actor:
 
     def done(self) -> bool:
         return self.is_done
+
+
+class ActorList(Actor):
+    actors: List[Actor]
+
+    def __init__(self, priority: int = 50) -> None:
+        super().__init__(priority)
+        self.actors = []
+
+    def add(self, actor: Actor) -> None:
+        self.actors.append(actor)
+
+    def _sort_actors(self) -> None:
+        self.actors.sort(key=lambda a: a.priority)
+
+    def step(self, time: float, view: Rect) -> None:
+        self._sort_actors()
+        super().step(time, view)
+        for actor in self.actors:
+            actor.step(self.time, self.view)
+        self.actors = [a for a in self.actors if not a.done()]
+
+    def _plot(self) -> None:
+        super()._plot()
+        for actor in self.actors:
+            actor.plot()
 
 
 class Car(Actor):
@@ -443,23 +489,25 @@ class Road(Actor):
 
 
 class Text(Actor):
-    FONT_SIZE = 14
+    DEFAULT_TEXT_STYLE = {
+        "color": "#333343",
+        "verticalalignment": "center",
+        "size": 14,
+    }
 
     def __init__(self, text: str, pos: Point, text_style: dict = None):
         super().__init__(99)
 
         self.text = text
         self.text_pos = pos
-        self.text_style = text_style if text_style else {}
-
-        self.time = 0
+        self.text_style = text_style if text_style else copy.deepcopy(
+            self.DEFAULT_TEXT_STYLE)
 
     def _plot(self) -> None:
         super()._plot()
 
         pos = self.text_pos + self.view.leftbottom
-        plt.text(pos.x, pos.y, self.text, verticalalignment="center",
-                 alpha=self.alpha, size=self.FONT_SIZE, **self.text_style)
+        plt.text(pos.x, pos.y, self.text, alpha=self.alpha, **self.text_style)
 
 
 class TrajLegend(Text):
@@ -472,6 +520,8 @@ class TrajLegend(Text):
 
         self.marker_pos = pos
         self.marker_style = copy.deepcopy(marker_style) if marker_style else {}
+        if "color" not in self.text_style:
+            self.text_style["color"] = self.marker_style["color"]
 
     def _plot(self) -> None:
         super()._plot()
@@ -479,6 +529,26 @@ class TrajLegend(Text):
         pos = self.marker_pos + self.view.leftbottom
         plt.scatter(pos.x, pos.y, s=self.MARKER_SIZE, alpha=self.alpha,
                     **self.marker_style)
+
+
+class Titles(ActorList):
+    TYPING_TIME = 1
+
+    def __init__(self, titles: Tuple[str, float, float, float], pos: Point,
+                 text_style: dict = None, priority: int = 99) -> None:
+        super().__init__(priority)
+        self.pos = pos
+
+        for text, start_time, end_time in titles:
+            print(text)
+            title = Text("", pos, text_style)
+            title.text_style["verticalalignment"] = "top"
+            title.text_style["horizontalalignment"] = "left"
+            title.text_style["size"] = 20
+            title.add_cb(TextTypingCB(text, start_time,
+                         min(start_time+self.TYPING_TIME, end_time)))
+            title.add_cb(FadeInOutCB(start_time, end_time))
+            self.add(title)
 
 
 class PolyLine(Actor):

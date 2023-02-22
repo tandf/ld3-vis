@@ -41,19 +41,19 @@ class Camera:
         return self._get_view(self, ego)
 
 class Scene:
-    actors: List[Actor]
+    actors: ActorList
     ego: Car
 
     def __init__(self, root_dir: str, name: str, fps: int = 60,
                  speed_factor: float = 1, fig_size: Tuple[int, int] = (8, 6),
                  dpi: int = 100, debug=False):
         self.root_dir = root_dir
-        self.out_dir = os.path.join(root_dir, name)
+        self.pic_dir = os.path.join(root_dir, name)
         self.name = name
 
-        if os.path.isdir(self.out_dir):
-            shutil.rmtree(self.out_dir)
-        os.mkdir(self.out_dir)
+        if os.path.isdir(self.pic_dir):
+            shutil.rmtree(self.pic_dir)
+        os.mkdir(self.pic_dir)
 
         # Animation setting
         self.speed_factor = speed_factor
@@ -71,7 +71,7 @@ class Scene:
         self.camera._follow_ego_x()
 
         # Actors
-        self.actors = []
+        self.actors = ActorList()
         self.ego = None
 
     def set_ego(self, ego: Car) -> None:
@@ -79,10 +79,7 @@ class Scene:
         self.camera._y = ego.pos.y
 
     def add_actor(self, actor: Actor) -> None:
-        self.actors.append(actor)
-
-    def sort_actors(self) -> None:
-        self.actors.sort(key=lambda a: a.priority)
+        self.actors.add(actor)
 
     def plot(self) -> None:
         f = plt.figure(figsize=self.fig_size, dpi=self.dpi)
@@ -92,8 +89,7 @@ class Scene:
         for spine in ax.spines.values():
             spine.set_visible(False)
 
-        for actor in self.actors:
-            actor.plot()
+        self.actors.plot()
 
         if self.debug:
             plt.title(f"{self.time:.1f} s")
@@ -103,11 +99,11 @@ class Scene:
             plt.tight_layout()
 
         filename = f"{self.cnt:06d}.png"
-        f.savefig(os.path.join(self.out_dir, filename))
+        f.savefig(os.path.join(self.pic_dir, filename))
         plt.close(f)
 
     def step(self, time: float = None) -> None:
-        if time:
+        if time is not None:
             self.time = time
         else:
             dt = 1 / self.fps * self.speed_factor
@@ -116,11 +112,7 @@ class Scene:
 
         self.view = self.camera.get_view(self.ego)
 
-        for actor in self.actors:
-            actor.step(self.time, self.view)
-            if self.debug and actor.done():
-                print(f"remove {actor}")
-        self.actors = [a for a in self.actors if not a.done()]
+        self.actors.step(self.time, self.view)
 
     def run(self, steps: int) -> None:
         self.step(0)  # init
@@ -133,11 +125,12 @@ class Scene:
 
     def to_vid(self, file: str = None) -> None:
         if not file:
-            file = f"{self.name}.mp4"
+            file = os.path.join(self.root_dir, f"{self.name}.mp4")
+        print(file)
 
         cmd = [f"ffmpeg -y",
                f"-framerate {self.fps}",
-               f"-i {os.path.join(self.out_dir, '%06d.png')}",
+               f"-i {os.path.join(self.pic_dir, '%06d.png')}",
                f"-c:v libx264",
                f"-profile:v high",
                f"-crf 20",
