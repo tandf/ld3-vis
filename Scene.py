@@ -11,17 +11,19 @@ from Actor import *
 from Controller import *
 from Point import *
 
+
 class Camera:
-    def __init__(self, get_view: function = None) -> None:
+    def __init__(self, get_view: function = None, limits: Point = None,
+                 relpos: Point = None) -> None:
         self._get_view = get_view
+        self.limits = limits if limits else Point(30, 20)  # meter
+        self.ego_relpos = relpos if relpos else Point(15, 3)  # meter
 
     def _follow_ego(self) -> None:
         def get_view(self, ego: Car) -> Rect:
             leftbottom = ego.pos - self.ego_relpos
             righttop = leftbottom + self.limits
             return Rect(leftbottom, righttop)
-        self.limits = Point(40, 30)  # meter
-        self.ego_relpos = Point(20, 12)  # meter
         self._get_view = get_view
 
     def _follow_ego_x(self) -> None:
@@ -31,8 +33,6 @@ class Camera:
             leftbottom = ego_pos - self.ego_relpos
             righttop = leftbottom + self.limits
             return Rect(leftbottom, righttop)
-        self.limits = Point(30, 20)  # meter
-        self.ego_relpos = Point(15, 3)  # meter
         self._y = 0
         self._get_view = get_view
 
@@ -44,9 +44,10 @@ class Scene:
     actors: ActorList
     ego: Car
 
-    def __init__(self, root_dir: str, name: str, fps: int = 60,
-                 speed_factor: float = 1, fig_size: Tuple[int, int] = (8, 6),
-                 dpi: int = 100, debug=False):
+    def __init__(self, root_dir: str, name: str, duration: float,
+                 fps: float = 60, speed_factor: float = 1,
+                 fig_size: Tuple[int, int] = (16, 12), dpi: int = 100,
+                 debug=False) -> None:
         self.root_dir = root_dir
         self.pic_dir = os.path.join(root_dir, name)
         self.name = name
@@ -56,6 +57,7 @@ class Scene:
         os.mkdir(self.pic_dir)
 
         # Animation setting
+        self.duration = duration
         self.speed_factor = speed_factor
         self.fps = fps
         self.cnt = 0
@@ -101,6 +103,7 @@ class Scene:
         filename = f"{self.cnt:06d}.png"
         f.savefig(os.path.join(self.pic_dir, filename))
         plt.close(f)
+        self.cnt += 1
 
     def step(self, time: float = None) -> None:
         if time is not None:
@@ -108,20 +111,26 @@ class Scene:
         else:
             dt = 1 / self.fps * self.speed_factor
             self.time += dt
-            self.cnt += 1
 
+        # Step ego vehicle to get the correct view first
+        self.ego.step(self.time, self.camera.get_view(self.ego))
         self.view = self.camera.get_view(self.ego)
 
         self.actors.step(self.time, self.view)
 
-    def run(self, steps: int) -> None:
+    def run(self, start_time: float = None, end_time: float = None) -> None:
         self.step(0)  # init
+        steps = self.duration * self.fps
 
-        with alive_bar(steps, title=self.name) as bar:
-            for _ in range(steps):
-                self.plot()
+        start = int(start_time * self.fps) if start_time is not None else 0
+        end = int(end_time * self.fps) if end_time is not None else steps
+
+        with alive_bar(end - start, title=self.name) as bar:
+            for i in range(steps):
+                if i >= start and i < end:
+                    self.plot()
+                    bar()
                 self.step()
-                bar()
 
     def to_vid(self, file: str = None) -> None:
         if not file:

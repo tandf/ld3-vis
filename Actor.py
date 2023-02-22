@@ -284,15 +284,16 @@ class GetPos:
 class Trajectory(Actor):
     trajectory: List[Point]
     ANIMATION_TIME = 1
-    MARKER_SIZE = 40
+    MARKER_SIZE = 120
 
     DEFAULT_MARKER_STYLE = {
         "marker": "+",
         "color": "grey",
+        "linewidth": 3,
     }
 
     DEFAULT_LINE_STYLE = {
-        "ls": ":",
+        "ls": "--",
         "marker": "None",
         "color": "grey",
     }
@@ -374,7 +375,7 @@ class Trajectory(Actor):
 class LaneDetection(Actor):
     car: Car
 
-    MARKER_SIZE = 60
+    MARKER_SIZE = 180
     DEFAULT_MARKER_STYLE = {
         "marker": "+",
         "color": "#40E0D0",
@@ -492,7 +493,7 @@ class Text(Actor):
     DEFAULT_TEXT_STYLE = {
         "color": "#333343",
         "verticalalignment": "center",
-        "size": 14,
+        "size": 30,
     }
 
     def __init__(self, text: str, pos: Point, text_style: dict = None):
@@ -511,7 +512,7 @@ class Text(Actor):
 
 
 class TrajLegend(Text):
-    MARKER_SIZE = 120
+    MARKER_SIZE = 600
 
     def __init__(self, text: str, pos: Point, text_style: dict = None,
                  marker_style: dict = None):
@@ -531,22 +532,25 @@ class TrajLegend(Text):
                     **self.marker_style)
 
 
-class Titles(ActorList):
+class TextList(ActorList):
+    actors: List[Text]
+
     TYPING_TIME = 1
 
     def __init__(self, titles: Tuple[str, float, float, float], pos: Point,
-                 text_style: dict = None, priority: int = 99) -> None:
+                 typing_effect: bool = True, text_style: dict = None,
+                 priority: int = 99) -> None:
         super().__init__(priority)
         self.pos = pos
 
         for text, start_time, end_time in titles:
-            print(text)
-            title = Text("", pos, text_style)
+            title = Text(text, pos, text_style)
             title.text_style["verticalalignment"] = "top"
             title.text_style["horizontalalignment"] = "left"
-            title.text_style["size"] = 20
-            title.add_cb(TextTypingCB(text, start_time,
-                         min(start_time+self.TYPING_TIME, end_time)))
+            title.text_style["size"] = 40
+            if typing_effect:
+                title.add_cb(TextTypingCB(text, start_time, min(
+                    start_time+self.TYPING_TIME, end_time)))
             title.add_cb(FadeInOutCB(start_time, end_time))
             self.add(title)
 
@@ -556,6 +560,7 @@ class PolyLine(Actor):
 
     DEFAULT_LINE_STYLE = {
         "color": "#708090",
+        "linewidth": 3,
     }
 
     DEFAULT_ARROW_STYLE = {

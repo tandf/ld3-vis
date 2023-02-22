@@ -19,7 +19,7 @@ class PIDController(Controller):
         self.yref = yref
 
         self.e_cum = 0
-        self.kp = 0.5
+        self.kp = 0.4
         self.ki = 0.1
         self.kd = 0
 

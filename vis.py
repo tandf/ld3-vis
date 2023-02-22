@@ -16,24 +16,26 @@ if not os.path.isdir(video_dir):
     os.mkdir(video_dir)
 
 
-def scene1(debug: bool = False):
-    duration = 15  # second
+def scene1(debug: bool = False, high_quality: bool = False):
+    duration = 18  # seconds
+    fps = 60 if high_quality else 10
+    dpi = 100 if high_quality else 54
 
-    fps = 10 if debug else 60
-    dpi = 100
-    steps = fps * duration
-
-    scene = Scene(video_dir, "scene1", fps, dpi=dpi, debug=debug)
+    scene = Scene(video_dir, "scene1", duration, fps, dpi=dpi, debug=debug)
 
     # Add road
     road = Road()
     scene.add_actor(road)
 
-    # NPC car
-    npc = Car(pos=Point(25, 4),
-              controller=Controller(Point(-10, 0)))
-    npc.load_texture(heading="left")
-    scene.add_actor(npc)
+    # NPCs
+    npc1 = Car(pos=Point(25, 4),
+              controller=Controller(Point(10, 0)))
+    npc1.load_texture(heading="right")
+    scene.add_actor(npc1)
+    npc2 = Car(pos=Point(129.3, 4),
+              controller=Controller(Point(8, 0)))
+    npc2.load_texture(heading="right")
+    scene.add_actor(npc2)
 
     # Ego vehicle
     egoController = PIDController(Point(15, 0), yref=0)
@@ -45,8 +47,8 @@ def scene1(debug: bool = False):
     # GPS measurement of ego vehicle (add normal distribution errors)
     gps_meas = Trajectory(
         scene.ego, GetPos.gausian_meas(scale=Point(.4, .4)), .15)
-    gps_meas.marker_style["color"] = "#D2691E"
-    gps_meas.line_style["color"] = "#D2691E"
+    gps_meas.marker_style["color"] = "#000080"
+    gps_meas.line_style["color"] = "#000080"
     gps_meas.add_cb(FadeInOutCB(gps_start_time, gps_start_time+2.5))
     scene.add_actor(gps_meas)
     egoController.traj = gps_meas
@@ -55,8 +57,8 @@ def scene1(debug: bool = False):
     # LiDAR measurement of ego vehicle (add normal distribution errors)
     lidar_meas = Trajectory(
         scene.ego, GetPos.gausian_meas(scale=Point(.4, .4)), .25)
-    lidar_meas.marker_style["color"] = "#6A5ACD"
-    lidar_meas.line_style["color"] = "#6A5ACD"
+    lidar_meas.marker_style["color"] = "#EE82EE"
+    lidar_meas.line_style["color"] = "#EE82EE"
     lidar_meas.add_cb(FadeInOutCB(lidar_start_time, lidar_start_time+2.5))
     scene.add_actor(lidar_meas)
     egoController.traj = lidar_meas
@@ -71,7 +73,7 @@ def scene1(debug: bool = False):
     scene.add_actor(imu_meas)
     egoController.traj = imu_meas
 
-    gps_attack_start_time = 10
+    gps_attack_start_time = 11
     # GPS measurement annotation
     gps_meas_legend = TrajLegend(
         "GPS", Point(2, 13), marker_style=gps_meas.marker_style)
@@ -80,7 +82,7 @@ def scene1(debug: bool = False):
 
     gps_attack_meas_legend = TrajLegend(
         "GPS", Point(2, 13), marker_style=gps_meas.marker_style)
-    gps_attack_meas_legend.marker_style["color"] = "red"
+    gps_attack_meas_legend.text_style["color"] = "red"
     gps_attack_meas_legend.add_cb(FadeInOutCB(gps_attack_start_time))
     scene.add_actor(gps_attack_meas_legend)
 
@@ -97,7 +99,7 @@ def scene1(debug: bool = False):
     scene.add_actor(imu_meas_legend)
 
     msf_start_time = 6
-    gps_attack_effect_time = gps_attack_start_time + 1
+    gps_attack_effect_time = gps_attack_start_time + 2
     # MSF measurement of ego vehicle (add normal distribution errors)
     msf_meas = Trajectory(
         scene.ego, GetPos.gausian_meas(scale=Point(.1, .1)), .1)
@@ -118,12 +120,14 @@ def scene1(debug: bool = False):
     class Attack:
         def __init__(self, yinit: int):
             self.y = yinit
-            self.dy = -0.1
+            self.dy = -0.04
             self.time = 0
         def __call__(self, p: Point, time: float) -> Point:
             if time > gps_attack_effect_time:
                 self.y += self.dy
-                self.dy *= (1 + 0.03 * (time - self.time))
+                self.dy *= (1 + 0.04 * (time - self.time))
+            else:
+                self.y = msf_meas.car.pos.y
             self.time = time
             return Point(p.x, self.y)
 
@@ -139,21 +143,22 @@ def scene1(debug: bool = False):
     # MSF measurement annotation
     attack_meas_legend = TrajLegend(
         "MSF", Point(9, 12), marker_style=msf_meas.marker_style)
+    attack_meas_legend.text_style["color"] = "red"
     attack_meas_legend.marker_style["color"] = "red"
     attack_meas_legend.add_cb(FadeInOutCB(gps_attack_effect_time))
     scene.add_actor(attack_meas_legend)
 
     # Polylines
-    gps_poly = PolyLine(Point(6, 13), [Point(
-        1, 0), Point(0, -1), Point(1, 0)], 1)
+    gps_poly = PolyLine(
+        Point(6, 13), [Point(1, 0), Point(0, -1), Point(1, 0)], 1)
     gps_poly.add_cb(FadeInOutCB(msf_start_time, gps_attack_start_time))
     scene.add_actor(gps_poly)
 
     gps_attack_poly = PolyLine(
-        Point(6, 13), [Point(1, 0), Point(0, -1), Point(1, 0)], 0)
+        Point(6, 13), [Point(1, 0), Point(0, -1), Point(1, 0)], 1)
     gps_attack_poly.line_style["color"] = "red"
     gps_attack_poly.line_style["zorder"] = 10
-    gps_attack_poly.add_cb(FadeInOutCB(gps_attack_effect_time))
+    gps_attack_poly.add_cb(FadeInOutCB(gps_attack_start_time+1))
     scene.add_actor(gps_attack_poly)
 
     lidar_poly = PolyLine(Point(6, 12), [Point(2, 0)], 1)
@@ -168,7 +173,7 @@ def scene1(debug: bool = False):
     real_start_time = 7
     # Real trajectory of ego vehicle
     real_meas = Trajectory(scene.ego)
-    real_meas.MARKER_SIZE = 20
+    real_meas.MARKER_SIZE = 40
     real_meas.ANIMATION_TIME = -1
     real_meas.marker_style["marker"] = "o"
     real_meas.add_cb(FadeInOutCB(real_start_time))
@@ -177,35 +182,48 @@ def scene1(debug: bool = False):
     # Real trajectory annotation
     real_meas_legend = TrajLegend(
         "Ground truth", Point(9, 13), marker_style=real_meas.marker_style)
-    real_meas_legend.MARKER_SIZE = 60
+    real_meas_legend.MARKER_SIZE = 120
     real_meas_legend.add_cb(FadeInOutCB(real_start_time))
     scene.add_actor(real_meas_legend)
 
-    ld_start_time = 10
-    # Lane detection results
-    ld_meas = LaneDetection(scene.ego, road.get_lines(), Point(10, 0),
-                            GetPos.gausian_meas(scale=Point(0, .2)))
-    ld_meas.add_cb(FadeInOutCB(ld_start_time))
-    scene.add_actor(ld_meas)
+    #  ld_start_time = 10
+    #  # Lane detection results
+    #  ld_meas = LaneDetection(scene.ego, road.get_lines(), Point(10, 0),
+                            #  GetPos.gausian_meas(scale=Point(0, .2)))
+    #  ld_meas.add_cb(FadeInOutCB(ld_start_time))
+    #  scene.add_actor(ld_meas)
 
-    # LD measurement annotation
-    ld_meas_legend = TrajLegend(
-        "LD", Point(9, 11), marker_style=ld_meas.marker_style)
-    ld_meas_legend.add_cb(FadeInOutCB(ld_start_time))
-    scene.add_actor(ld_meas_legend)
+    #  # LD measurement annotation
+    #  ld_meas_legend = TrajLegend(
+        #  "LD", Point(9, 11), marker_style=ld_meas.marker_style)
+    #  ld_meas_legend.add_cb(FadeInOutCB(ld_start_time))
+    #  scene.add_actor(ld_meas_legend)
 
-    titles = Titles([
-        ("Multi-Sensor Fusion (MSF)", 0, gps_attack_start_time),
-        ("FusionRipper attack", gps_attack_start_time, 15),
-        ], Point(0, scene.camera.limits.y))
+    titles = TextList([
+        ("Multi-Sensor Fusion (MSF)", 0, gps_attack_start_time-1),
+        ("FusionRipper attack", gps_attack_start_time-1, float("inf")),
+        ], Point(1, scene.camera.limits.y))
+    for title in titles.actors:
+        title.text_style["size"] = 48
     scene.add_actor(titles)
 
-    scene.run(steps)
+    explanations = TextList([
+        ("MSF fuses inputs from different sensors to get the vehicle localization.",
+         1, gps_attack_start_time),
+        ("FusionRipper attack can attack MSF results by spoofing only GPS signal.",
+         gps_attack_start_time, float("inf")),
+    ], Point(1, scene.camera.limits.y-2), typing_effect=False)
+    for explanation in explanations.actors:
+        explanation.text_style["size"] = 24
+    scene.add_actor(explanations)
+
+    scene.run()
     scene.to_vid()
 
 def main():
     debug = False
-    scene1(debug)
+    high_quality = True
+    scene1(debug=debug, high_quality=high_quality)
 
 
 if __name__ == "__main__":
