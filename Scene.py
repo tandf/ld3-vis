@@ -31,8 +31,8 @@ class Camera:
             leftbottom = ego_pos - self.ego_relpos
             righttop = leftbottom + self.limits
             return Rect(leftbottom, righttop)
-        self.limits = Point(40, 30)  # meter
-        self.ego_relpos = Point(20, 12)  # meter
+        self.limits = Point(30, 20)  # meter
+        self.ego_relpos = Point(15, 3)  # meter
         self._y = 0
         self._get_view = get_view
 

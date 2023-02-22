@@ -39,14 +39,13 @@ class DeleteAfterDisappearCB(Callback):
             self.is_done = True
             self.actor.is_done = True
 
+
 class PeriodCB(Callback):
-    def __init__(self, start_time: float = 0, end_time: float = float("inf"),
-                 fadein_time: float = 1, fadeout_time: float = 1) -> None:
+    def __init__(self, start_time: float = 0,
+                 end_time: float = float("inf")) -> None:
         super().__init__()
         self.start_time = start_time
         self.end_time = end_time
-        self.fadein_time = fadein_time
-        self.fadeout_time = fadeout_time
 
     def _step(self) -> None:
         return
@@ -61,7 +60,9 @@ class PeriodCB(Callback):
 class FadeInOutCB(PeriodCB):
     def __init__(self, start_time: float = 0, end_time: float = float("inf"),
                  fadein_time: float = 1, fadeout_time: float = 1) -> None:
-        super().__init__(start_time, end_time, fadein_time, fadeout_time)
+        super().__init__(start_time, end_time)
+        self.fadein_time = fadein_time
+        self.fadeout_time = fadeout_time
 
     def _step(self) -> None:
         self.actor.alpha = min(
@@ -77,11 +78,28 @@ class FadeInOutCB(PeriodCB):
 class TrajAddPosLifecycleCB(PeriodCB):
     actor: Trajectory
 
-    def __init__(self, start_time: float = 0, end_time: float = float("inf"),
-                 fadein_time: float = 1, fadeout_time: float = 1) -> None:
-        super().__init__(start_time, end_time, fadein_time, fadeout_time)
+    def __init__(self, start_time: float = 0,
+                 end_time: float = float("inf")) -> None:
+        super().__init__(start_time, end_time)
 
     def _step(self) -> None:
+        self.actor._should_add_pos = self.time >= self.start_time \
+            and self.time <= self.end_time
+
+
+class ActionCB(PeriodCB):
+    actor: Actor
+
+    def __init__(self, action: callable, action_time: float) -> None:
+        super().__init__(0, action_time)
+        self._action = action
+
+    def _action(self, actor:Actor) -> None:
+        return
+
+    def _step(self) -> None:
+        if self.time > self.end_time:
+            self._action(self.actor)
         self.actor._should_add_pos = self.time >= self.start_time \
             and self.time <= self.end_time
 
@@ -220,7 +238,7 @@ class GetPos:
 class Trajectory(Actor):
     trajectory: List[Point]
     ANIMATION_TIME = 1
-    MARKER_SIZE = 60
+    MARKER_SIZE = 40
 
     DEFAULT_MARKER_STYLE = {
         "marker": "+",
@@ -461,3 +479,79 @@ class TrajLegend(Text):
         pos = self.marker_pos + self.view.leftbottom
         plt.scatter(pos.x, pos.y, s=self.MARKER_SIZE, alpha=self.alpha,
                     **self.marker_style)
+
+
+class PolyLine(Actor):
+    lines: List[Line]
+
+    DEFAULT_LINE_STYLE = {
+        "color": "#708090",
+    }
+
+    DEFAULT_ARROW_STYLE = {
+        "length_includes_head": True,
+        "width": .02,
+        "head_width": .15,
+        "head_length": .4,
+    }
+
+    def __init__(self, start: Point, deltas: List[Point], duration: float,
+                 start_time: float = -1, line_style: dict = None,
+                 arrow_style: dict = None, priority: int = 50):
+        super().__init__(priority)
+        self.start = start
+        self.duration = duration
+        self.start_time = start_time
+
+        self.percentage = 0
+
+        self.line_style = line_style if line_style else copy.deepcopy(
+            self.DEFAULT_LINE_STYLE)
+        self.arrow_style = arrow_style if arrow_style else copy.deepcopy(
+            self.DEFAULT_ARROW_STYLE)
+
+        self.lines = []
+        p = self.start
+        for delta in deltas:
+            line = Line(p, delta=delta)
+            self.lines.append(line)
+            p += delta
+        self.length = sum([l.length() for l in self.lines])
+
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+
+        if self.visible and self.start_time == -1:
+            self.start_time = self.time
+
+        if self.duration > 0 and self.time >= self.start_time:
+            self.percentage = min(
+                1, (self.time - self.start_time) / self.duration)
+        else:
+            self.percentage = 1
+
+    def _plot(self) -> None:
+        super()._plot()
+
+        length = self.percentage * self.length
+        len_drawn = 0
+        # Draw all lines but the last one without arrow
+        X, Y = [], []
+        arrow_line = None
+        for line in self.lines:
+            p = line.start + self.view.leftbottom
+            X.append(p.x)
+            Y.append(p.y)
+
+            if line.length() + len_drawn >= length:
+                part = (length - len_drawn) / line.length()
+                arrow_line = line.interpolate(part) + self.view.leftbottom
+                break
+            else:
+                len_drawn += line.length()
+
+        #  print(X, Y)
+        plt.plot(X, Y, **self.line_style)
+        plt.arrow(arrow_line.start.x, arrow_line.start.y, arrow_line.delta.x,
+                  arrow_line.delta.y, alpha=self.alpha,
+                  **{**self.arrow_style, **self.line_style})
