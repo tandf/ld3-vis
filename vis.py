@@ -243,7 +243,7 @@ def scene1(debug: bool = False, high_quality: bool = False):
         explanation.text_style["size"] = 24
     scene.add_actor(explanations)
 
-    scene.run()
+    scene.run(ending_freeze_time=2)
     scene.to_vid()
 
 def main():

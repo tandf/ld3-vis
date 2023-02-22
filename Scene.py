@@ -83,6 +83,10 @@ class Scene:
     def add_actor(self, actor: Actor) -> None:
         self.actors.add(actor)
 
+    def get_filename(self) -> str:
+        filename = f"{self.cnt:06d}.png"
+        return os.path.join(self.pic_dir, filename)
+
     def plot(self) -> None:
         f = plt.figure(figsize=self.fig_size, dpi=self.dpi)
         plt.xlim(self.view.leftbottom.x, self.view.righttop.x)
@@ -100,8 +104,7 @@ class Scene:
             ax.get_xaxis().set_visible(False)
             plt.tight_layout()
 
-        filename = f"{self.cnt:06d}.png"
-        f.savefig(os.path.join(self.pic_dir, filename))
+        f.savefig(self.get_filename())
         plt.close(f)
         self.cnt += 1
 
@@ -118,7 +121,8 @@ class Scene:
 
         self.actors.step(self.time, self.view)
 
-    def run(self, start_time: float = None, end_time: float = None) -> None:
+    def run(self, start_time: float = None, end_time: float = None,
+            ending_freeze_time: float = None) -> None:
         self.step(0)  # init
         steps = self.duration * self.fps
 
@@ -131,6 +135,15 @@ class Scene:
                     self.plot()
                     bar()
                 self.step()
+
+        if ending_freeze_time is not None:
+            frame_cnt = ending_freeze_time * self.fps
+            self.cnt -= 1
+            last_frame = self.get_filename()
+            for _ in range(frame_cnt):
+                self.cnt += 1
+                filename = self.get_filename()
+                shutil.copy(last_frame, filename)
 
     def to_vid(self, file: str = None) -> None:
         if not file:
