@@ -1,7 +1,7 @@
 from __future__ import annotations
 from PIL import Image
 from io import BytesIO
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, Polygon
 from scipy import ndimage
 from typing import List
 import cairosvg
@@ -9,6 +9,7 @@ import copy
 import matplotlib.pyplot as plt
 import numpy as np
 import math
+from colour import Color
 
 from Point import *
 from Texture import Texture
@@ -103,13 +104,19 @@ class TextTypingCB(PeriodCB):
 
         if self.time >= self.start_time:
             text_length = math.floor(len(self.text) * self.progress)
-            text = self.text[:text_length]
+            if isinstance(self.text, str):
+                text = self.text[:text_length]
+            elif isinstance(self.text, list):
+                text = "".join(self.text[:text_length])
+            else:
+                raise Exception(
+                    f"TextTypingCB only takes string and list, got {type(self.text)}")
             if text and text_length < len(self.text):
                 text += "_"
             self.actor.text = text
-            
 
-class ImageGrow(PeriodCB):
+
+class ImageGrowCB(PeriodCB):
     actor: Image
 
     def __init__(self, start_time: float = 0,
@@ -123,6 +130,40 @@ class ImageGrow(PeriodCB):
         else:
             self.actor.visible = True
         self.actor.rect = self.actor.get_rect(self.progress)
+
+
+class ChangeColorCB(PeriodCB):
+    length: int
+    colors: List[Color]
+    color: str
+
+    def __init__(self, start_time: float, duration: float, start_color: Color,
+                 end_color: Color, _step: callable, change_back: bool = False) -> None:
+        super().__init__(start_time, start_time+duration)
+        self.start_color = start_color
+        self.end_color = end_color
+        self.color = None
+        self._step = _step
+        self.change_back = change_back
+
+    def _interpolate(self, s: float, e: float) -> float:
+        if self.change_back:
+            p = abs(self.progress * 2 - 1)
+        else:
+            p = 1 - self.progress
+        return e * (1-p) + s * p
+
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+        if self.progress >= 0 and self.progress <= 1:
+            r = self._interpolate(self.start_color.red, self.end_color.red)
+            g = self._interpolate(self.start_color.green, self.end_color.green)
+            b = self._interpolate(self.start_color.blue, self.end_color.blue)
+            self.color = Color(rgb=(r, g, b))
+            self._step(self.actor, self.color.hex_l)
+
+    def _step(self, actor: Actor, color: str) -> None:
+        return
 
 
 class ActionCB(Callback):
@@ -157,6 +198,7 @@ class Actor:
         self.alpha = 1
 
     def add_cb(self, callback: Callback) -> None:
+        callback = copy.deepcopy(callback)
         callback.actor = self
         self.callbacks.append(callback)
 
@@ -191,6 +233,10 @@ class ActorList(Actor):
 
     def _sort_actors(self) -> None:
         self.actors.sort(key=lambda a: a.priority)
+
+    def add_cb_for_all(self, callback: Callback) -> None:
+        for actor in self.actors:
+            actor.add_cb(copy.deepcopy(callback))
 
     def step(self, time: float, view: Rect) -> None:
         self._sort_actors()
@@ -321,10 +367,10 @@ class Trajectory(Actor):
         self.last_add_pos_time = 0
         self._should_add_pos = True
 
-        self.marker_style = marker_style if marker_style else copy.deepcopy(
-            self.DEFAULT_MARKER_STYLE)
-        self.line_style = line_style if line_style else copy.deepcopy(
-            self.DEFAULT_LINE_STYLE)
+        self.marker_style = marker_style if marker_style is not None \
+            else copy.deepcopy(self.DEFAULT_MARKER_STYLE)
+        self.line_style = line_style if line_style is not None \
+            else copy.deepcopy(self.DEFAULT_LINE_STYLE)
 
         self._get_pos = get_pos if get_pos else GetPos.accurate_meas
 
@@ -389,6 +435,7 @@ class LaneDetection(Actor):
     car: Car
 
     MARKER_SIZE = 180
+
     DEFAULT_MARKER_STYLE = {
         "marker": "+",
         "color": "#40E0D0",
@@ -402,22 +449,44 @@ class LaneDetection(Actor):
         "head_length": .5,
     }
 
+    DEFAULT_LINE_STYLE = {
+        "color": "#40E0D0",
+        "ls": "--",
+    }
+
     def __init__(self, car: Car,  lanes: List[float], offset: Point,
-                 get_pos: callable = None, marker_style: dict = None,
-                 arrow_style: dict = None):
+                 get_pos: callable = None, sample_period: float = 0.1,
+                 marker_style: dict = None, arrow_style: dict = None,
+                 line_style: dict = None):
         super().__init__()
         self.car = car
         self.lanes = lanes
         self.offset = offset
         self._get_pos = get_pos if get_pos else GetPos.accurate_meas
+        self.last_get_pos_time = 0
+        self.mpos = None
+        self.sample_period = sample_period
 
-        self.marker_style = marker_style if marker_style else copy.deepcopy(
-            self.DEFAULT_MARKER_STYLE)
-        self.arrow_style = arrow_style if arrow_style else copy.deepcopy(
-            self.DEFAULT_ARROW_STYLE)
+        self.marker_style = marker_style if marker_style is not None \
+            else copy.deepcopy(self.DEFAULT_MARKER_STYLE)
+        self.arrow_style = arrow_style if arrow_style is not None \
+            else copy.deepcopy(self.DEFAULT_ARROW_STYLE)
+        self.line_style = arrow_style if line_style is not None \
+            else copy.deepcopy(self.DEFAULT_LINE_STYLE)
 
     def _get_pos(self, pos: Point, time: float) -> Point:
         raise Exception("Uninitialized")
+
+    def step(self, time: float, view: Rect) -> None:
+        super().step(time, view)
+        mpos = self._get_pos(self.car.pos, self.time) + self.offset
+        if self.mpos is None:
+            self.mpos = mpos
+        else:
+            self.mpos.x = mpos.x
+            if self.time - self.last_get_pos_time > self.sample_period:
+                self.mpos.y = mpos.y
+                self.last_get_pos_time += self.sample_period
 
     def find_adjecent_lanes(self, y: float) -> Tuple(float, float):
         bigger = [l for l in self.lanes if l >= y]
@@ -432,19 +501,19 @@ class LaneDetection(Actor):
         super()._plot()
 
         upper, lower = self.find_adjecent_lanes(self.car.pos.y)
-        mpos = self._get_pos(self.car.pos, self.time) + self.offset
 
         if upper is not None and lower is not None:
             # Draw marker
-            plt.scatter(mpos.x, mpos.y, s=self.MARKER_SIZE,
+            plt.scatter(self.mpos.x, self.mpos.y, s=self.MARKER_SIZE,
                         **self.marker_style)
+            plt.plot([self.car.pos.x+2, self.mpos.x], [
+                     self.mpos.y, self.mpos.y], **self.line_style)
 
-            # TODO: Draw arrows to lane lines
-            upper_arrow_y = mpos.y + .5
-            lower_arrow_y = mpos.y - .5
-            plt.arrow(mpos.x, upper_arrow_y, 0, upper -
+            upper_arrow_y = self.mpos.y + .5
+            lower_arrow_y = self.mpos.y - .5
+            plt.arrow(self.mpos.x, upper_arrow_y, 0, upper -
                       upper_arrow_y, alpha=self.alpha, **self.arrow_style)
-            plt.arrow(mpos.x, lower_arrow_y, 0, lower -
+            plt.arrow(self.mpos.x, lower_arrow_y, 0, lower -
                       lower_arrow_y, alpha=self.alpha, **self.arrow_style)
 
 
@@ -502,6 +571,32 @@ class Road(Actor):
                 self.draw_dashed_line(line, left, right)
 
 
+class Mux(Actor):
+    DEFAULT_POLYGON_STYLE = {
+        "facecolor": "#eeeeee",
+        "linestyle": "-",
+        "linewidth": 1,
+        "edgecolor": "black",
+    }
+
+    def __init__(self, pos: Point, size: float = 1, polygon_style: dict = None,
+                 priority: int = 50) -> None:
+        super().__init__(priority)
+        points = [Point(0, 2), Point(1, 1), Point(1, -1), Point(0, -2)]
+        self.points = [p * size + pos for p in points]
+
+        self.polygon_style = polygon_style if polygon_style is not None \
+            else copy.deepcopy(self.DEFAULT_POLYGON_STYLE)
+
+    def _plot(self) -> None:
+        super()._plot()
+
+        points = [p + self.view.leftbottom for p in self.points]
+        points = np.array([[p.x, p.y] for p in points])
+        polygon = Polygon(points, alpha=self.alpha, **self.polygon_style)
+        plt.gca().add_patch(polygon)
+
+
 class Text(Actor):
     DEFAULT_TEXT_STYLE = {
         "color": "#333343",
@@ -509,19 +604,31 @@ class Text(Actor):
         "size": 30,
     }
 
-    def __init__(self, text: str, pos: Point, text_style: dict = None):
+    DEFAULT_BOX_STYLE = {
+        "alpha": .5,
+        "facecolor": "#eeeeee",
+        "boxstyle": "round,pad=0.5",
+    }
+
+    def __init__(self, text: str, pos: Point, text_style: dict = None,
+                 box_style: dict = None, add_box: bool = False):
         super().__init__(99)
 
         self.text = text
         self.text_pos = pos
-        self.text_style = text_style if text_style else copy.deepcopy(
-            self.DEFAULT_TEXT_STYLE)
+        self.text_style = text_style if text_style is not None \
+            else copy.deepcopy(self.DEFAULT_TEXT_STYLE)
+        self.box_style = box_style if box_style is not None \
+            else copy.deepcopy(self.DEFAULT_BOX_STYLE)
+        if not add_box:
+            self.box_style = None
 
     def _plot(self) -> None:
         super()._plot()
 
         pos = self.text_pos + self.view.leftbottom
-        plt.text(pos.x, pos.y, self.text, alpha=self.alpha, **self.text_style)
+        plt.text(pos.x, pos.y, self.text, alpha=self.alpha,
+                 bbox=self.box_style, **self.text_style)
 
 
 class TrajLegend(Text):
@@ -593,10 +700,10 @@ class PolyLine(Actor):
 
         self.percentage = 0
 
-        self.line_style = line_style if line_style else copy.deepcopy(
-            self.DEFAULT_LINE_STYLE)
-        self.arrow_style = arrow_style if arrow_style else copy.deepcopy(
-            self.DEFAULT_ARROW_STYLE)
+        self.line_style = line_style if line_style is not None \
+            else copy.deepcopy(self.DEFAULT_LINE_STYLE)
+        self.arrow_style = arrow_style if arrow_style is not None \
+            else copy.deepcopy(self.DEFAULT_ARROW_STYLE)
 
         self.lines = []
         p = self.start

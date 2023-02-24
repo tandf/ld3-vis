@@ -4,8 +4,13 @@ from __future__ import annotations
 from alive_progress import alive_bar
 from typing import List, Tuple
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure
 import os
 import shutil
+import threading
+import time
+
+plt.rcParams.update({'figure.max_open_warning': 0})
 
 from Actor import *
 from Controller import *
@@ -43,6 +48,7 @@ class Camera:
 class Scene:
     actors: ActorList
     ego: Car
+    threads: List[threading.Thread]
 
     def __init__(self, root_dir: str, name: str, duration: float,
                  fps: float = 60, speed_factor: float = 1,
@@ -76,6 +82,8 @@ class Scene:
         self.actors = ActorList()
         self.ego = None
 
+        self.threads = []
+
     def set_ego(self, ego: Car) -> None:
         self.ego = ego
         self.camera._y = ego.pos.y
@@ -87,7 +95,7 @@ class Scene:
         filename = f"{self.cnt:06d}.png"
         return os.path.join(self.pic_dir, filename)
 
-    def plot(self) -> None:
+    def plot(self, multithread: bool) -> None:
         f = plt.figure(figsize=self.fig_size, dpi=self.dpi)
         plt.xlim(self.view.leftbottom.x, self.view.righttop.x)
         plt.ylim(self.view.leftbottom.y, self.view.righttop.y)
@@ -104,8 +112,21 @@ class Scene:
             ax.get_xaxis().set_visible(False)
             plt.tight_layout()
 
-        f.savefig(self.get_filename())
-        plt.close(f)
+        def savefig_func(f: Figure, filename: str):
+            f.savefig(filename)
+            plt.close(f)
+
+        filename = self.get_filename()
+        if multithread:
+            while len(self.threads) > 30:
+                self.threads = [t for t in self.threads if t.is_alive()]
+                time.sleep(.1)
+            t = threading.Thread(target=savefig_func, args=(f, filename))
+            t.start()
+            self.threads.append(t)
+        else:
+            savefig_func(f, filename)
+
         self.cnt += 1
 
     def step(self, time: float = None) -> None:
@@ -122,9 +143,9 @@ class Scene:
         self.actors.step(self.time, self.view)
 
     def run(self, start_time: float = None, end_time: float = None,
-            ending_freeze_time: float = None) -> None:
+            ending_freeze_time: float = None, multithread: bool = True) -> None:
         self.step(0)  # init
-        steps = self.duration * self.fps
+        steps = int(self.duration * self.fps)
 
         start = int(start_time * self.fps) if start_time is not None else 0
         end = int(end_time * self.fps) if end_time is not None else steps
@@ -132,7 +153,7 @@ class Scene:
         with alive_bar(end - start, title=self.name) as bar:
             for i in range(steps):
                 if i >= start and i < end:
-                    self.plot()
+                    self.plot(multithread)
                     bar()
                 self.step()
 
@@ -146,6 +167,9 @@ class Scene:
                 shutil.copy(last_frame, filename)
 
     def to_vid(self, file: str = None) -> None:
+        for t in self.threads:
+            t.join()
+
         if not file:
             file = os.path.join(self.root_dir, f"{self.name}.mp4")
         print(file)
