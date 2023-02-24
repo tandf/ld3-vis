@@ -39,7 +39,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     gps_meas.line_style["color"] = "#000080"
     gps_meas.add_cb(FadeInOutCB(gps_start_time, gps_start_time+2.5))
     scene.add_actor(gps_meas)
-    egoController.traj = gps_meas
+    egoController.meas = gps_meas
 
     lidar_start_time = 2.5
     # LiDAR measurement of ego vehicle (add normal distribution errors)
@@ -49,7 +49,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     lidar_meas.line_style["color"] = "#EE82EE"
     lidar_meas.add_cb(FadeInOutCB(lidar_start_time, lidar_start_time+2.5))
     scene.add_actor(lidar_meas)
-    egoController.traj = lidar_meas
+    egoController.meas = lidar_meas
 
     imu_start_time = 4
     # IMU measurement of ego vehicle (add normal distribution errors)
@@ -59,7 +59,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     imu_meas.line_style["color"] = "#5F9EA0"
     imu_meas.add_cb(FadeInOutCB(imu_start_time, imu_start_time+2.5))
     scene.add_actor(imu_meas)
-    egoController.traj = imu_meas
+    egoController.meas = imu_meas
 
     gps_attack_start_time = 11
     # GPS measurement annotation
@@ -96,7 +96,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     msf_meas.add_cb(FadeInOutCB(msf_start_time))
     msf_meas.add_cb(TrajAddPosLifecycleCB(end_time=gps_attack_effect_time))
     scene.add_actor(msf_meas)
-    egoController.traj = msf_meas
+    egoController.meas = msf_meas
 
     # MSF measurement annotation
     msf_meas_legend = TrajLegend(
@@ -126,7 +126,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     msf_attack_meas.add_cb(FadeInOutCB(gps_attack_effect_time))
     msf_attack_meas.add_cb(TrajAddPosLifecycleCB(gps_attack_effect_time))
     scene.add_actor(msf_attack_meas)
-    egoController.traj = msf_attack_meas
+    egoController.meas = msf_attack_meas
 
     # MSF measurement annotation
     attack_meas_legend = TrajLegend(
@@ -200,25 +200,13 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     crash.add_cb(ImageGrowCB(17.8, 18))
     scene.add_actor(crash)
 
-    #  ld_start_time = 10
-    #  # Lane detection results
-    #  ld_meas = LaneDetection(scene.ego, road.get_lines(), Point(10, 0),
-                            #  GetPos.gausian_meas(scale=Point(0, .2)))
-    #  ld_meas.add_cb(FadeInOutCB(ld_start_time))
-    #  scene.add_actor(ld_meas)
-
-    #  # LD measurement annotation
-    #  ld_meas_legend = TrajLegend(
-        #  "LD", Point(9, 11), marker_style=ld_meas.marker_style)
-    #  ld_meas_legend.add_cb(FadeInOutCB(ld_start_time))
-    #  scene.add_actor(ld_meas_legend)
-
     titles = TextList([
         ("Multi-Sensor Fusion (MSF)", 0, gps_attack_start_time-1),
         ("FusionRipper attack", gps_attack_start_time-1, float("inf")),
-        ], Point(1, scene.camera.limits.y-.2))
+        ], Point(1, scene.camera.limits.y-1))
     for title in titles.actors:
         title.text_style["size"] = 48
+        title.text_style["verticalalignment"] = "baseline"
     scene.add_actor(titles)
 
     explanations = TextList([

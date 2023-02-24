@@ -1,7 +1,7 @@
 from Scene import Scene
 from Point import Point
 from Actor import *
-from Controller import *
+from Controller import PIDController
 
 
 def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
@@ -19,13 +19,15 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     fusion_time = fusion_explanation_time + 1
     suspicious_explanation_time = fusion_time + 5
     suspicious_time1 = suspicious_explanation_time + 2
-    suspicious_time2 = suspicious_explanation_time + 3
+    suspicious_time2 = suspicious_explanation_time + 4
     suspicious_highlight_time = 2
     mux_time = suspicious_time2 + suspicious_highlight_time
     localization_time = mux_time + 2
-    attack_time = localization_time + 2
+    attack_time = localization_time + 3
+    detected_time = attack_time + 3
+    stop_time = detected_time + 3
 
-    duration = attack_time + 4  # seconds
+    duration = stop_time + .5
 
     scene = Scene(video_dir, "scene2", duration, fps, dpi=dpi, debug=debug)
 
@@ -33,14 +35,32 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     road = Road()
     scene.add_actor(road)
 
+    class ChangeSpeedCB(PeriodCB):
+        actor: Car
+
+        def __init__(self, speed_from: float, speed_to: float,
+                     start_time: float = 0,
+                     end_time: float = float("inf")) -> None:
+            super().__init__(start_time, end_time)
+            self.speed_from = speed_from
+            self.speed_to = speed_to
+
+        def step(self, time: float, view: Rect) -> None:
+            super().step(time, view)
+            self.actor.controller.speed.x = self.speed_from * \
+                (1 - self.progress) + self.speed_to * self.progress
+
     # Ego vehicle
-    egoController = PIDController(Point(15, 0), yref=0)
-    scene.set_ego(Car(pos=Point(0, 0), controller=egoController))
-    scene.ego.load_texture()
-    scene.add_actor(scene.ego)
+    egoSpeed = Point(15, 0)
+    egoController = PIDController(egoSpeed, yref=0)
+    ego = Car(pos=Point(0, 0), controller=egoController)
+    ego.load_texture()
+    ego.add_cb(ChangeSpeedCB(egoSpeed.x, 0, detected_time, stop_time))
+    scene.set_ego(ego)
+    scene.add_actor(ego)
 
     # Lane detection results
-    ld_meas = LaneDetection(scene.ego, road.get_lines(), Point(10, 0),
+    ld_meas = LaneDetection(ego, road.get_lines(), Point(10, 0),
                             GetPos.gausian_meas(scale=Point(0, .1)),
                             sample_period=0.1)
     ld_meas.add_cb(FadeInOutCB(ld_start_time))
@@ -60,12 +80,16 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
         change_text_color, True))
     scene.add_actor(ld_meas_legend)
 
+    def use_ld_for_loc(actor: Car):
+        actor.controller.meas = ld_meas
+    ego.add_cb(ActionCB(use_ld_for_loc, detected_time))
+
     # Real trajectory of ego vehicle
-    real_meas = Trajectory(scene.ego)
+    real_meas = Trajectory(ego)
     real_meas.MARKER_SIZE = 40
     real_meas.ANIMATION_TIME = -1
     real_meas.marker_style["marker"] = "o"
-    real_meas.add_cb(FadeInOutCB(real_start_time))
+    real_meas.add_cb(FadeInOutCB(real_start_time, msf_start_time))
     scene.add_actor(real_meas)
 
     # Real trajectory annotation
@@ -75,14 +99,38 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     real_meas_legend.add_cb(FadeInOutCB(real_start_time, msf_start_time))
     scene.add_actor(real_meas_legend)
 
+    def msf_attack_action(actor: Trajectory):
+        class Attack:
+            def __init__(self, yinit: int):
+                self.y = yinit
+                self.dy = 0.01
+                self.time = 0
+
+            def __call__(self, p: Point, time: float) -> Point:
+                if time > attack_time:
+                    self.y += self.dy
+                    self.dy *= (1 + 0.1 * (time - self.time))
+                else:
+                    self.y = msf_meas.car.pos.y
+                self.time = time
+                return Point(p.x, self.y)
+
+        actor._get_pos = Attack(0)
+
+    def change_traj_color(actor: Actor, color: str):
+        actor.marker_style["color"] = color
+        actor.line_style["color"] = color
+
     # MSF measurement of ego vehicle (add normal distribution errors)
-    msf_meas = Trajectory(
-        scene.ego, GetPos.gausian_meas(scale=Point(.2, .2)), .1)
+    msf_meas = Trajectory(ego, GetPos.gausian_meas(scale=Point(.2, .2)), .1)
     msf_meas.marker_style["color"] = "green"
     msf_meas.line_style["color"] = "green"
     msf_meas.add_cb(FadeInOutCB(msf_start_time))
+    msf_meas.add_cb(ChangeColorCB(attack_time, 1.5, Color("green"),
+                                  Color("red"), change_traj_color))
+    msf_meas.add_cb(ActionCB(msf_attack_action, attack_time))
     scene.add_actor(msf_meas)
-    egoController.traj = msf_meas
+    egoController.meas = msf_meas
 
     # MSF measurement annotation
     msf_meas_legend = TrajLegend(
@@ -182,18 +230,52 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     mux2localization_poly.line_style["color"] = msf_direct_color
     mux2localization_poly.add_cb(FadeInOutCB(localization_time))
     mux2localization_poly.add_cb(ChangeColorCB(
-        attack_time, 2,
+        detected_time, 1,
         Color(mux2localization_poly.line_style["color"]),
         Color(fusion_color), change_arrow_color))
     scene.add_actor(mux2localization_poly)
 
+    # Attacker image
+    attacker = Image("pics/attacker.png", Point(2.5, 9), w=3, h=3)
+    attacker.texture.image_style["zorder"] = 99
+    attacker.add_cb(ImageGrowCB(attack_time-.2, attack_time))
+    scene.add_actor(attacker)
+
+    # Signal image
+    spoofing_signal = Image(
+        "pics/signal.png", Point(4.5, 7), w=4, h=4, rotate_degree=215)
+    spoofing_signal.texture.image_style["zorder"] = 99
+    spoofing_signal.add_cb(
+        ImageGrowCB(attack_time, attack_time+.2))
+    scene.add_actor(spoofing_signal)
+
+    # Detected text
+    detected_text = Text("Attack detected!", Point(8, 16))
+    detected_text.text_style["color"] = "red"
+    detected_text.add_cb(FadeInOutCB(detected_time-1))
+    scene.add_actor(detected_text)
+
+    # Use fusion text
+    use_fusion_text = Text("Use fusion results", Point(21, 11.225))
+    use_fusion_text.text_style["color"] = "red"
+    use_fusion_text.add_cb(FadeInOutCB(detected_time))
+    scene.add_actor(use_fusion_text)
+
+    # Slowing down text
+    slowing_down_text = Text("Slowing down", Point(21, 15))
+    slowing_down_text.text_style["color"] = "red"
+    slowing_down_text.add_cb(FadeInOutCB(detected_time))
+    scene.add_actor(slowing_down_text)
+
     titles = TextList([
         ("Lane detection (LD)", ld_title_time, msf_start_time),
-        (["", "$L$", "$D$", "${ }^3$"] +
+        (["$L$", "$D$", "${ }^3$"] +
          list(": A LD based defense"), msf_start_time, float('inf')),
-    ], Point(1, scene.camera.limits.y-.2))
+        #  ("$LD^3$: A LD based defense", msf_start_time, float('inf')),
+    ], Point(1, scene.camera.limits.y-1))
     for title in titles.actors:
         title.text_style["size"] = 48
+        title.text_style["verticalalignment"] = "baseline"
     scene.add_actor(titles)
 
     explanations = TextList([
@@ -220,6 +302,6 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
         explanation.text_style["size"] = 24
     scene.add_actor(explanations)
 
-    #  scene.run(start_time=mux_time-1)
-    scene.run()
+    #  scene.run(start_time=detected_time-1)
+    scene.run(ending_freeze_time=1)
     scene.to_vid()

@@ -110,7 +110,7 @@ class Scene:
         else:
             ax.get_yaxis().set_visible(False)
             ax.get_xaxis().set_visible(False)
-            plt.tight_layout()
+            plt.tight_layout(pad=0)
 
         def savefig_func(f: Figure, filename: str):
             f.savefig(filename)
@@ -157,6 +157,9 @@ class Scene:
                     bar()
                 self.step()
 
+        for t in self.threads:
+            t.join()
+
         if ending_freeze_time is not None:
             frame_cnt = ending_freeze_time * self.fps
             self.cnt -= 1
@@ -167,9 +170,6 @@ class Scene:
                 shutil.copy(last_frame, filename)
 
     def to_vid(self, file: str = None) -> None:
-        for t in self.threads:
-            t.join()
-
         if not file:
             file = os.path.join(self.root_dir, f"{self.name}.mp4")
         print(file)

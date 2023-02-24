@@ -1,21 +1,20 @@
 from Point import Point
-from Actor import *
+import copy
 
 
 class Controller:
     def __init__(self, speed: Point) -> None:
-        self.speed = speed
+        self.speed = copy.deepcopy(speed)
 
     def get_speed(self) -> Point:
         return self.speed
 
 
 class PIDController(Controller):
-    def __init__(self, speed: Point, yref: int,
-                 trajectory: Trajectory = None) -> None:
+    def __init__(self, speed: Point, yref: int, meas=None) -> None:
         super().__init__(speed)
 
-        self.traj = trajectory
+        self.meas = meas
         self.yref = yref
 
         self.e_cum = 0
@@ -24,9 +23,11 @@ class PIDController(Controller):
         self.kd = 0
 
     def get_speed(self) -> Point:
-        assert self.traj
-        if self.traj.trajectory:
-            ymeas = self.traj.trajectory[-1].y
+        assert self.meas
+        assert hasattr(self.meas, "get_recent_meas")
+        meas = self.meas.get_recent_meas()
+        if meas:
+            ymeas = meas.y
             error = (self.yref - ymeas)
             self.e_cum = self.e_cum * 0.7 + error
 

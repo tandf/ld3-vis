@@ -13,6 +13,7 @@ from colour import Color
 
 from Point import *
 from Texture import Texture
+from Controller import Controller
 
 
 class Callback:
@@ -168,7 +169,7 @@ class ChangeColorCB(PeriodCB):
 
 class ActionCB(Callback):
     def __init__(self, action: callable, action_time: float) -> None:
-        super().__init__(0, action_time)
+        super().__init__()
         self.action_time = action_time
         self._action = action
 
@@ -253,8 +254,10 @@ class ActorList(Actor):
 
 class Car(Actor):
     texture: Texture
+    controller: Controller
 
-    def __init__(self, controller, pos: Point = None, appear_once = True):
+    def __init__(self, controller: Controller, pos: Point = None,
+                 appear_once: bool = True) -> None:
         super().__init__(90)
 
         self.controller = controller
@@ -382,6 +385,10 @@ class Trajectory(Actor):
         pos.birthday = self.time
         return pos
 
+    def get_recent_meas(self) -> Point:
+        if self.trajectory:
+            return self.trajectory[-1]
+
     def step(self, time: float, view: Rect) -> None:
         super().step(time, view)
 
@@ -476,6 +483,9 @@ class LaneDetection(Actor):
 
     def _get_pos(self, pos: Point, time: float) -> Point:
         raise Exception("Uninitialized")
+
+    def get_recent_meas(self) -> Point:
+        return self.mpos
 
     def step(self, time: float, view: Rect) -> None:
         super().step(time, view)
@@ -626,9 +636,13 @@ class Text(Actor):
     def _plot(self) -> None:
         super()._plot()
 
+        box_style = copy.deepcopy(self.box_style)
+        if box_style and box_style["alpha"]:
+            box_style["alpha"] *= self.alpha
+
         pos = self.text_pos + self.view.leftbottom
         plt.text(pos.x, pos.y, self.text, alpha=self.alpha,
-                 bbox=self.box_style, **self.text_style)
+                 bbox=box_style, **self.text_style).set_in_layout(False)
 
 
 class TrajLegend(Text):
@@ -657,22 +671,22 @@ class TextList(ActorList):
 
     TYPING_TIME = 1
 
-    def __init__(self, titles: Tuple[str, float, float, float], pos: Point,
+    def __init__(self, text_list: Tuple[str, float, float, float], pos: Point,
                  typing_effect: bool = True, text_style: dict = None,
                  priority: int = 99) -> None:
         super().__init__(priority)
         self.pos = pos
 
-        for text, start_time, end_time in titles:
-            title = Text(text, pos, text_style)
-            title.text_style["verticalalignment"] = "top"
-            title.text_style["horizontalalignment"] = "left"
-            title.text_style["size"] = 40
+        for string, start_time, end_time in text_list:
+            text = Text(string, pos, text_style)
+            text.text_style["verticalalignment"] = "top"
+            text.text_style["horizontalalignment"] = "left"
+            text.text_style["size"] = 40
             if typing_effect:
-                title.add_cb(TextTypingCB(text, start_time, min(
+                text.add_cb(TextTypingCB(string, start_time, min(
                     start_time+self.TYPING_TIME, end_time)))
-            title.add_cb(FadeInOutCB(start_time, end_time))
-            self.add(title)
+            text.add_cb(FadeInOutCB(start_time, end_time))
+            self.add(text)
 
 
 class PolyLine(Actor):
