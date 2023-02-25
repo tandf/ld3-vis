@@ -15,10 +15,10 @@ def main():
         os.mkdir(video_dir)
 
     debug = False
-    high_quality = True
+    high_quality = False
 
-    scene1(video_dir, debug=debug, high_quality=high_quality)
-    #  scene2(video_dir, debug=debug, high_quality=high_quality)
+    #  scene1(video_dir, debug=debug, high_quality=high_quality)
+    scene2(video_dir, debug=debug, high_quality=high_quality)
 
 
 if __name__ == "__main__":

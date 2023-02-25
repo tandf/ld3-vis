@@ -29,6 +29,10 @@ class Callback:
         self.time = time
         self.view = view
 
+    def init(self) -> None:
+        return
+
+
 class DeleteAfterDisappearCB(Callback):
     def __init__(self) -> None:
         super().__init__()
@@ -62,21 +66,31 @@ class PeriodCB(Callback):
 
 class FadeInOutCB(PeriodCB):
     def __init__(self, start_time: float = 0, end_time: float = float("inf"),
-                 fadein_time: float = 1, fadeout_time: float = 1) -> None:
+                 fadein_time: float = 1, fadeout_time: float = 1,
+                 remove_after_fadeout: bool = True) -> None:
         super().__init__(start_time, end_time)
         self.fadein_time = fadein_time
         self.fadeout_time = fadeout_time
+        self.remove_after_fadeout = remove_after_fadeout
 
     def step(self, time: float, view: Rect) -> None:
         super().step(time, view)
-        self.actor.alpha = min(
-            (self.time - self.start_time) / self.fadein_time,
-            (self.end_time - self.time) / self.fadeout_time,
-            1)
-        self.actor.visible = self.time >= self.start_time \
-            and self.time <= self.end_time
+        if self.time >= self.start_time and self.time <= self.end_time:
+            self.actor.visible = True
+            self.actor.alpha = max(min(
+                (self.time - self.start_time) / self.fadein_time,
+                (self.end_time - self.time) / self.fadeout_time,
+                1), 0)
         if self.time > self.end_time:
-            self.actor.is_done = True
+            self.actor.visible = False
+            self.is_done = True
+            if self.remove_after_fadeout:
+                self.actor.is_done = True
+
+    def init(self) -> None:
+        super().init()
+        self.actor.visible = False
+        self.actor.alpha = 0
 
 
 class TrajAddPosLifecycleCB(PeriodCB):
@@ -202,6 +216,7 @@ class Actor:
     def add_cb(self, callback: Callback) -> None:
         callback = copy.deepcopy(callback)
         callback.actor = self
+        callback.init()
         self.callbacks.append(callback)
 
     def step(self, time: float, view: Rect) -> None:
@@ -446,11 +461,9 @@ class LaneDetection(Actor):
 
     DEFAULT_MARKER_STYLE = {
         "marker": "+",
-        "color": "#40E0D0",
     }
 
     DEFAULT_ARROW_STYLE = {
-        "color": "#40E0D0",
         "length_includes_head": True,
         "width": .02,
         "head_width": .3,
@@ -458,7 +471,6 @@ class LaneDetection(Actor):
     }
 
     DEFAULT_LINE_STYLE = {
-        "color": "#40E0D0",
         "ls": "--",
     }
 
@@ -760,8 +772,7 @@ class PolyLine(Actor):
             else:
                 len_drawn += line.length()
 
-        #  print(X, Y)
-        plt.plot(X, Y, **self.line_style)
+        plt.plot(X, Y, alpha=self.alpha, **self.line_style)
         plt.arrow(arrow_line.start.x, arrow_line.start.y, arrow_line.delta.x,
                   arrow_line.delta.y, alpha=self.alpha,
                   **{**self.arrow_style, **self.line_style})
