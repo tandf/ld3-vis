@@ -202,8 +202,9 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
 
     titles = TextList([
         ("Multi-Sensor Fusion (MSF)", 0, gps_attack_start_time-1),
-        ("FusionRipper attack", gps_attack_start_time-1, float("inf")),
-        ], Point(1, scene.camera.limits.y-1))
+        (list("FusionRipper") + ["$^{[1]}$"] + list(" attack"),
+         gps_attack_start_time-1, float("inf")),
+    ], Point(1, scene.camera.limits.y-.5))
     for title in titles.actors:
         title.text_style["size"] = 48
         title.text_style["verticalalignment"] = "baseline"
@@ -214,10 +215,19 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
          1, gps_attack_start_time),
         ("FusionRipper attack can attack MSF results by spoofing only GPS signal.",
          gps_attack_start_time, float("inf")),
-    ], Point(1, scene.camera.limits.y-2), typing_effect=False)
+    ], Point(1, scene.camera.limits.y-1.5), typing_effect=False)
     for explanation in explanations.actors:
         explanation.text_style["size"] = 24
     scene.add_actor(explanations)
+
+    # Citation text: Cite the FusionRipper paper
+    citatoin_text = """[1] J. Shen, J. Y. Won, Z. Chen, and Q. A. Chen, “Drift with Devil: Security of Multi-Sensor Fusion based
+     Localization in High-Level Autonomous Driving under GPS Spoofing,” in USENIX Security, 2020."""
+    citation = Text(citatoin_text, Point(.5, .1))
+    citation.text_style["size"] = 22
+    citation.add_cb(FadeInOutCB(
+        gps_attack_start_time-1))
+    scene.add_actor(citation)
 
     scene.run(ending_freeze_time=2)
     scene.to_vid()

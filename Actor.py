@@ -130,7 +130,8 @@ class ImageGrowCB(PeriodCB):
             self.actor.visible = False
         else:
             self.actor.visible = True
-        self.actor.rect = self.actor.get_rect(self.progress)
+        factor = min(1, max(0, self.progress))
+        self.actor.rect = self.actor.get_rect(factor)
 
 
 class ChangeColorCB(PeriodCB):

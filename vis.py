@@ -17,8 +17,8 @@ def main():
     debug = False
     high_quality = True
 
-    #  scene1(video_dir, debug=debug, high_quality=high_quality)
-    scene2(video_dir, debug=debug, high_quality=high_quality)
+    scene1(video_dir, debug=debug, high_quality=high_quality)
+    #  scene2(video_dir, debug=debug, high_quality=high_quality)
 
 
 if __name__ == "__main__":
