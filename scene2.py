@@ -8,19 +8,19 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     fps = 60 if high_quality else 10
     dpi = 100
 
-    ld_title_time = 1
+    ld_title_time = .5
     ld_explanation_time = ld_title_time + 1
     real_start_time = ld_explanation_time + 1
     msf_start_time = real_start_time + 3
     detect_start_time = msf_start_time + 1
     ar_box_time = detect_start_time + 2
-    naive_ld2ar = ar_box_time + 3
-    ld_attack_time = naive_ld2ar + 1
-    fusion_time = ld_attack_time + 4
+    naive_ld2ar = ar_box_time + 5
+    ld_attack_time = naive_ld2ar + 3
+    fusion_time = ld_attack_time + 2
     suspicious_explanation_time = fusion_time + 8
     mux_time = suspicious_explanation_time + 5
     localization_time = mux_time + 2
-    attack_time = localization_time + 3
+    attack_time = localization_time + 5
     detected_time = attack_time + 2
     stop_time = detected_time + 5
 
@@ -95,21 +95,21 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
         actor.controller.meas = ld_meas
     ego.add_cb(ActionCB(use_ld_for_loc, detected_time))
 
-    # Real trajectory of ego vehicle
-    real_meas = Trajectory(ego)
-    real_meas.MARKER_SIZE = 40
-    real_meas.ANIMATION_TIME = -1
-    real_meas.marker_style["marker"] = "o"
-    real_meas.add_cb(FadeInOutCB(real_start_time, msf_start_time))
-    scene.add_actor(real_meas)
+    #  # Real trajectory of ego vehicle
+    #  real_meas = Trajectory(ego)
+    #  real_meas.MARKER_SIZE = 40
+    #  real_meas.ANIMATION_TIME = -1
+    #  real_meas.marker_style["marker"] = "o"
+    #  real_meas.add_cb(FadeInOutCB(real_start_time, msf_start_time))
+    #  scene.add_actor(real_meas)
 
-    # Real trajectory annotation
-    real_meas_legend = TrajLegend(
-        "Ground truth", Point(1, 12.5), marker_style=real_meas.marker_style)
-    real_meas_legend.marker_style['color'] = gt_color
-    real_meas_legend.MARKER_SIZE = 120
-    real_meas_legend.add_cb(FadeInOutCB(real_start_time, msf_start_time))
-    scene.add_actor(real_meas_legend)
+    #  # Real trajectory annotation
+    #  real_meas_legend = TrajLegend(
+        #  "Ground truth", Point(1, 12.5), marker_style=real_meas.marker_style)
+    #  real_meas_legend.marker_style['color'] = gt_color
+    #  real_meas_legend.MARKER_SIZE = 120
+    #  real_meas_legend.add_cb(FadeInOutCB(real_start_time, msf_start_time))
+    #  scene.add_actor(real_meas_legend)
 
     def msf_attack_action(actor: Trajectory):
         class Attack:
@@ -201,10 +201,14 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     # Attack response poly lines
     detect2ar_poly = PolyLine(Point(13.4, 15), [Point(2.6, 0)], 1)
     detect2ar_poly.line_style["color"] = detect_color
-    detect2ar_poly.add_cb(FadeInOutCB(
-        ar_box_time, mux_time, remove_after_fadeout=False))
-    detect2ar_poly.add_cb(FadeInOutCB(detected_time))
+    detect2ar_poly.add_cb(FadeInOutCB(ar_box_time, mux_time))
     scene.add_actor(detect2ar_poly)
+
+    detect2ar_poly_2 = PolyLine(Point(13.4, 15), [Point(2.6, 0)], 1)
+    detect2ar_poly_2.line_style["color"] = detect_color
+    detect2ar_poly_2.add_cb(FadeInOutCB(detected_time))
+    scene.add_actor(detect2ar_poly_2)
+
     # Attack! text
     detect_attack_text = Text("Attack!", Point(13.5, 15.5))
     detect_attack_text.text_style["color"] = "red"
@@ -223,7 +227,7 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     ld2ar_poly.line_style["color"] = sensor_direct_color
     ld2ar_poly.add_cb(FadeInOutCB(naive_ld2ar, fusion_time))
     ld2ar_poly.add_cb(ChangeColorCB(
-        ld_attack_time, 1, Color(sensor_direct_color), Color("red"),
+        ld_attack_time-1, 1, Color(sensor_direct_color), Color("red"),
         change_arrow_color, False))
     ld2ar_poly.add_cb(ChangeColorCB(
         fusion_time-1, 1, Color("red"), Color(sensor_direct_color),
@@ -327,14 +331,14 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     scene.add_actor(detected_text)
 
     # Use fusion text
-    use_fusion_text = Text("Use safety-driven fusion results", Point(16, 10))
+    use_fusion_text = Text("Use safety-driven fusion", Point(16, 10))
     use_fusion_text.text_style["color"] = "red"
     use_fusion_text.text_style["size"] = 18
     use_fusion_text.add_cb(FadeInOutCB(detected_time))
     scene.add_actor(use_fusion_text)
 
     # Slowing down text
-    stopping_text = Text("Try to have safe in-lane stopping", Point(16, 16.5))
+    stopping_text = Text("In-lane stopping", Point(16, 16.5))
     stopping_text.text_style["color"] = "red"
     stopping_text.text_style["size"] = 18
     stopping_text.add_cb(FadeInOutCB(detected_time))
@@ -354,19 +358,18 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
         ("\nLD can be used for local localization, and the vehicle knows its position within the lane.",
          ld_explanation_time, msf_start_time),
         ("The first to use a local localization method (LD) to defend against attacks on\n"
-         "global localization. LD3 first cross-check with MSF to detect attacks,\n"
-         "and then perform safe in-lane stopping to best avoid accidents.",
+         "global localization.\n"
+         "$LD^3$ first cross-checks with MSF to detect attacks, and then performs safe in-lane stopping.",
          msf_start_time, naive_ld2ar),
-        ("For localization, we can naively fully trust LD, but that is vulnerable to LD attacks.",
+        ("For localization, we can naively fully trust LD, but it's vulnerable to LD attacks.",
          naive_ld2ar, fusion_time),
-        ("Instead, we design a novel safety-driven fusion to fuse MSF and LD based on their\n"
-         "aggressiveness to cause lane departure.",
+        ("Instead, we design a novel safety-driven fusion based on\n"
+         "aggressiveness of causing lane departure.",
          fusion_time, suspicious_explanation_time),
-        ("This way, no matter the attacker chooses to attack LD or MSF,\n"
-         "the attack effect will be penalized in the fusion process\n"
-         "to best achieve safe in-lane stopping.",
+        ("No matter whether the attacker chooses to attack LD or MSF, the attack effect will be\n"
+         "penalized to achieve safe in-lane stopping.",
          suspicious_explanation_time, mux_time),
-        ("Without attack, results from MSF is used as localization.",
+        ("Without attack, results from MSF is used for localization.",
          mux_time, attack_time),
         ("With attack, fusion results are used for localization to slow down within the lane.",
          attack_time, float("inf")),
