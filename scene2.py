@@ -16,7 +16,7 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     ar_box_time = detect_start_time + 2
     naive_ld2ar = ar_box_time + 5
     ld_attack_time = naive_ld2ar + 3
-    fusion_time = ld_attack_time + 2
+    fusion_time = ld_attack_time + 4
     suspicious_explanation_time = fusion_time + 8
     mux_time = suspicious_explanation_time + 5
     localization_time = mux_time + 2
@@ -64,18 +64,45 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     scene.set_ego(ego)
     scene.add_actor(ego)
 
+    normal_ld_meas = GetPos.gausian_meas(scale=Point(0, .1))
+    attack_ld_meas = GetPos.gausian_meas(loc=Point(0, -2), scale=Point(0, .4))
+    def ld_meas_attack_action(actor: LaneDetection):
+        actor._get_pos = attack_ld_meas
+    def ld_meas_recover_action(actor: LaneDetection):
+        actor._get_pos = normal_ld_meas
+
+    def change_ld_color(actor: LaneDetection, color: str):
+        actor.marker_style["color"] = color
+        actor.arrow_style["color"] = color
+        actor.line_style["color"] = color
+
     # Lane detection results
     ld_meas = LaneDetection(ego, road.get_lines(), Point(10, 0),
-                            GetPos.gausian_meas(scale=Point(0, .1)),
-                            sample_period=0.1)
-    ld_meas.marker_style["color"] = ld_traj_color
-    ld_meas.arrow_style["color"] = ld_meas.marker_style["color"]
-    ld_meas.line_style["color"] = ld_meas.marker_style["color"]
+                            normal_ld_meas, sample_period=0.1)
+    change_ld_color(ld_meas, ld_traj_color)
     ld_meas.add_cb(FadeInOutCB(ld_explanation_time))
+    ld_meas.add_cb(ActionCB(ld_meas_attack_action, ld_attack_time))
+    ld_meas.add_cb(ChangeColorCB(
+        ld_attack_time-1, 1, Color(ld_traj_color), Color("red"),
+        change_ld_color, False))
+    ld_meas.add_cb(ActionCB(ld_meas_recover_action, mux_time))
+    ld_meas.add_cb(ChangeColorCB(
+        mux_time-1, 1, Color("red"), Color(ld_traj_color),
+        change_ld_color, False))
     scene.add_actor(ld_meas)
 
-    def change_text_color(actor: Actor, color: str):
+    # Use ld for localization
+    def use_ld_for_loc(actor: Car):
+        actor.controller.meas = ld_meas
+    def use_msf_for_loc(actor: Car):
+        actor.controller.meas = msf_meas
+    ego.add_cb(ActionCB(use_ld_for_loc, ld_attack_time))
+    ego.add_cb(ActionCB(use_msf_for_loc, fusion_time))
+    ego.add_cb(ActionCB(use_ld_for_loc, detected_time))
+
+    def change_legend_color(actor: Actor, color: str):
         actor.text_style["color"] = color
+        actor.marker_style["color"] = color
 
     # LD measurement annotation
     ld_meas_legend = TrajLegend(
@@ -85,15 +112,11 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     ld_meas_legend.add_cb(FadeInOutCB(ld_explanation_time))
     ld_meas_legend.add_cb(ChangeColorCB(
         ld_attack_time-1, 1, Color(ld_traj_color), Color("red"),
-        change_text_color, False))
+        change_legend_color, False))
     ld_meas_legend.add_cb(ChangeColorCB(
         mux_time-1, 1, Color("red"), Color(ld_traj_color),
-        change_text_color, False))
+        change_legend_color, False))
     scene.add_actor(ld_meas_legend)
-
-    def use_ld_for_loc(actor: Car):
-        actor.controller.meas = ld_meas
-    ego.add_cb(ActionCB(use_ld_for_loc, detected_time))
 
     #  # Real trajectory of ego vehicle
     #  real_meas = Trajectory(ego)
@@ -143,6 +166,9 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     msf_meas.add_cb(ActionCB(msf_attack_action, attack_time))
     scene.add_actor(msf_meas)
     egoController.meas = msf_meas
+
+    def change_text_color(actor: Actor, color: str):
+        actor.text_style["color"] = color
 
     # MSF measurement annotation
     msf_meas_legend = TrajLegend(
@@ -378,6 +404,6 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
         explanation.text_style["size"] = 24
     scene.add_actor(explanations)
 
-    #  scene.run(start_time=mux_time, end_time=mux_time + 4)
+    #  scene.run(start_time=ld_attack_time-2, end_time=fusion_time+1)
     scene.run(ending_freeze_time=1)
     scene.to_vid()
