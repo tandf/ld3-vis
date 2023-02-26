@@ -5,9 +5,17 @@ from Controller import *
 
 
 def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
-    duration = 18  # seconds
     fps = 60 if high_quality else 10
     dpi = 100
+
+    gps_start_time = 1
+    lidar_start_time = gps_start_time + 1.5
+    imu_start_time = lidar_start_time + 1.5
+    msf_start_time = imu_start_time + 2
+    real_start_time = msf_start_time + 1
+    gps_attack_start_time = imu_start_time + 5
+    crash_time = gps_attack_start_time + 6
+    duration = crash_time # seconds
 
     scene = Scene(video_dir, "scene1", duration, fps, dpi=dpi, debug=debug)
 
@@ -20,7 +28,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
               controller=Controller(Point(10, 0)))
     npc1.load_texture(heading="right")
     scene.add_actor(npc1)
-    npc2 = Car(pos=Point(129.3, 4),
+    npc2 = Car(pos=Point(108, 4),
               controller=Controller(Point(8, 0)))
     npc2.load_texture(heading="right")
     scene.add_actor(npc2)
@@ -31,7 +39,6 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     scene.ego.load_texture()
     scene.add_actor(scene.ego)
 
-    gps_start_time = 1
     # GPS measurement of ego vehicle (add normal distribution errors)
     gps_meas = Trajectory(
         scene.ego, GetPos.gausian_meas(scale=Point(.4, .4)), .15)
@@ -41,7 +48,6 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     scene.add_actor(gps_meas)
     egoController.meas = gps_meas
 
-    lidar_start_time = 2.5
     # LiDAR measurement of ego vehicle (add normal distribution errors)
     lidar_meas = Trajectory(
         scene.ego, GetPos.gausian_meas(scale=Point(.4, .4)), .25)
@@ -51,7 +57,6 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     scene.add_actor(lidar_meas)
     egoController.meas = lidar_meas
 
-    imu_start_time = 4
     # IMU measurement of ego vehicle (add normal distribution errors)
     imu_meas = Trajectory(
         scene.ego, GetPos.gausian_meas(scale=Point(.4, .4)), .1)
@@ -61,7 +66,6 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     scene.add_actor(imu_meas)
     egoController.meas = imu_meas
 
-    gps_attack_start_time = 11
     # GPS measurement annotation
     gps_meas_legend = TrajLegend(
         "GPS", Point(2, 13), marker_style=gps_meas.marker_style)
@@ -86,7 +90,6 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     imu_meas_legend.add_cb(FadeInOutCB(imu_start_time))
     scene.add_actor(imu_meas_legend)
 
-    msf_start_time = 6
     gps_attack_effect_time = gps_attack_start_time + 2
     # MSF measurement of ego vehicle (add normal distribution errors)
     msf_meas = Trajectory(
@@ -145,7 +148,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     gps_attack_poly = PolyLine(
         Point(6, 13), [Point(1, 0), Point(0, -1), Point(1, 0)], 1)
     gps_attack_poly.line_style["color"] = "red"
-    gps_attack_poly.line_style["zorder"] = 10
+    gps_attack_poly.line_style["zorder"] = 99
     gps_attack_poly.add_cb(FadeInOutCB(gps_attack_start_time+1))
     scene.add_actor(gps_attack_poly)
 
@@ -158,46 +161,45 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     imu_poly.add_cb(FadeInOutCB(msf_start_time))
     scene.add_actor(imu_poly)
 
-    real_start_time = 7
-    # Real trajectory of ego vehicle
-    real_meas = Trajectory(scene.ego)
-    real_meas.MARKER_SIZE = 40
-    real_meas.ANIMATION_TIME = -1
-    real_meas.marker_style["marker"] = "o"
-    real_meas.add_cb(FadeInOutCB(real_start_time))
-    scene.add_actor(real_meas)
+    #  # Real trajectory of ego vehicle
+    #  real_meas = Trajectory(scene.ego)
+    #  real_meas.MARKER_SIZE = 40
+    #  real_meas.ANIMATION_TIME = -1
+    #  real_meas.marker_style["marker"] = "o"
+    #  real_meas.add_cb(FadeInOutCB(real_start_time))
+    #  scene.add_actor(real_meas)
 
-    # Real trajectory annotation
-    real_meas_legend = TrajLegend(
-        "Ground truth", Point(9, 13), marker_style=real_meas.marker_style)
-    real_meas_legend.MARKER_SIZE = 120
-    real_meas_legend.add_cb(FadeInOutCB(real_start_time))
-    scene.add_actor(real_meas_legend)
+    #  # Real trajectory annotation
+    #  real_meas_legend = TrajLegend(
+        #  "Ground truth", Point(9, 13), marker_style=real_meas.marker_style)
+    #  real_meas_legend.MARKER_SIZE = 120
+    #  real_meas_legend.add_cb(FadeInOutCB(real_start_time))
+    #  scene.add_actor(real_meas_legend)
 
     # Attacker image
-    attacker = Image("pics/attacker.png", Point(23, 13), w=3, h=3)
+    attacker = Image("pics/attacker.png", Point(2.5, 9), w=3, h=3)
     attacker.texture.image_style["zorder"] = 99
     attacker.add_cb(ImageGrowCB(gps_attack_start_time-.2, gps_attack_start_time))
     scene.add_actor(attacker)
 
     # Signal image
     spoofing_signal = Image(
-        "pics/signal.png", Point(20.5, 10.5), w=4, h=4, rotate_degree=135)
+        "pics/signal.png", Point(4.8, 7.2), w=4, h=4, rotate_degree=230)
     spoofing_signal.texture.image_style["zorder"] = 99
     spoofing_signal.add_cb(
         ImageGrowCB(gps_attack_start_time, gps_attack_start_time+.2))
     scene.add_actor(spoofing_signal)
 
     # GPS Spoofing text
-    gps_spoofing_text = Text("GPS spoofing", Point(22, 10.5))
+    gps_spoofing_text = Text("GPS spoofing", Point(4.5, 9.5))
     gps_spoofing_text.text_style["color"] = "red"
     gps_spoofing_text.add_cb(FadeInOutCB(gps_attack_start_time))
     scene.add_actor(gps_spoofing_text)
 
     # Crash image
-    crash = Image("pics/crash.png", Point(17, 7), 4, 4)
+    crash = Image("pics/crash.png", Point(17, 6.5), 4, 4)
     crash.texture.image_style["zorder"] = 99
-    crash.add_cb(ImageGrowCB(17.8, 18))
+    crash.add_cb(ImageGrowCB(crash_time-.2, crash_time))
     scene.add_actor(crash)
 
     titles = TextList([
@@ -212,7 +214,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
 
     explanations = TextList([
         ("MSF fuses inputs from different sensors to get the vehicle localization.",
-         1, gps_attack_start_time),
+         .5, gps_attack_start_time-1),
         ("FusionRipper attack can attack MSF results by spoofing only GPS signal.",
          gps_attack_start_time, float("inf")),
     ], Point(1, scene.camera.limits.y-1.5), typing_effect=False)
@@ -229,5 +231,6 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
         gps_attack_start_time-1))
     scene.add_actor(citation)
 
-    scene.run(ending_freeze_time=2)
+    scene.run(ending_freeze_time=1)
+    #  scene.run(start_time=gps_attack_start_time, end_time=gps_attack_start_time+4)
     scene.to_vid()

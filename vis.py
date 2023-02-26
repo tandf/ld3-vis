@@ -15,9 +15,9 @@ def main():
         os.mkdir(video_dir)
 
     debug = False
-    high_quality = False
+    high_quality = True
 
-    #  scene1(video_dir, debug=debug, high_quality=high_quality)
+    scene1(video_dir, debug=debug, high_quality=high_quality)
     scene2(video_dir, debug=debug, high_quality=high_quality)
 
 

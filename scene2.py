@@ -411,7 +411,7 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
         ("No matter whether the attacker chooses to attack LD or MSF, the attack effect will be penalized\n"
          "to achieve safe in-lane stopping.",
          suspicious_explanation_time, mux_time),
-        ("Without attack, results from MSF is used for localization.",
+        ("Without attack, results from MSF are used for localization.",
          mux_time, attack_time),
         ("With attack, fusion results are used for localization to slow down within the lane.",
          attack_time, float("inf")),
