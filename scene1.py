@@ -217,7 +217,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
          gps_attack_start_time, float("inf")),
     ], Point(1, scene.camera.limits.y-1.5), typing_effect=False)
     for explanation in explanations.actors:
-        explanation.text_style["size"] = 24
+        explanation.text_style["size"] = 22
     scene.add_actor(explanations)
 
     # Citation text: Cite the FusionRipper paper

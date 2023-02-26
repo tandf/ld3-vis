@@ -600,6 +600,7 @@ class Mux(Actor):
         "linestyle": "-",
         "linewidth": 1,
         "edgecolor": "black",
+        "zorder": 50
     }
 
     def __init__(self, pos: Point, size: float = 1, polygon_style: dict = None,
@@ -663,7 +664,7 @@ class TrajLegend(Text):
 
     def __init__(self, text: str, pos: Point, text_style: dict = None,
                  marker_style: dict = None):
-        text_pos = pos + Point(1, 0)
+        text_pos = pos + Point(.5, 0)
         super().__init__(text, text_pos, text_style)
 
         self.marker_pos = pos
@@ -708,13 +709,15 @@ class PolyLine(Actor):
     DEFAULT_LINE_STYLE = {
         "color": "#708090",
         "linewidth": 3,
+        "zorder": 10,
     }
 
     DEFAULT_ARROW_STYLE = {
         "length_includes_head": True,
         "width": .02,
-        "head_width": .15,
+        "head_width": .2,
         "head_length": .4,
+        "zorder": 10,
     }
 
     def __init__(self, start: Point, deltas: List[Point], duration: float,

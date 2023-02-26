@@ -161,7 +161,7 @@ class Scene:
             t.join()
 
         if ending_freeze_time is not None:
-            frame_cnt = ending_freeze_time * self.fps
+            frame_cnt = int(ending_freeze_time * self.fps)
             self.cnt -= 1
             last_frame = self.get_filename()
             for _ in range(frame_cnt):
