@@ -227,8 +227,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
      Localization in High-Level Autonomous Driving under GPS Spoofing,” in USENIX Security, 2020."""
     citation = Text(citatoin_text, Point(.5, .1))
     citation.text_style["size"] = 22
-    citation.add_cb(FadeInOutCB(
-        gps_attack_start_time-1))
+    citation.add_cb(FadeInOutCB(gps_attack_start_time-1))
     scene.add_actor(citation)
 
     scene.run(ending_freeze_time=1)

@@ -420,6 +420,14 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
         explanation.text_style["size"] = 22
     scene.add_actor(explanations)
 
+    # Citation text: Cite the FusionRipper paper
+    citatoin_text = """Video from: Lane detection and object detection with OpenCV & TensorFlow - YouTube
+https://www.youtube.com/watch?v=G2VaJvNNp4k"""
+    citation = Text(citatoin_text, Point(.5, .1))
+    citation.text_style["size"] = 22
+    citation.add_cb(FadeInOutCB(ld_title_time, msf_start_time))
+    scene.add_actor(citation)
+
     #  scene.run(start_time=attack_time, end_time=attack_time+1)
     scene.run()
     scene.to_vid()
