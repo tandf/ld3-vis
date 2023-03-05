@@ -11,16 +11,19 @@ class Controller:
 
 
 class PIDController(Controller):
-    def __init__(self, speed: Point, yref: int, meas=None) -> None:
+    def __init__(self, speed: Point, yref: int, meas=None, pid=None) -> None:
         super().__init__(speed)
 
         self.meas = meas
         self.yref = yref
 
         self.e_cum = 0
-        self.kp = 0.7
-        self.ki = 0.1
-        self.kd = 0
+        if pid:
+            self.kp, self.ki, self.kd = pid
+        else:
+            self.kp = 0.7
+            self.ki = 0.1
+            self.kd = 0
 
     def get_speed(self) -> Point:
         assert self.meas

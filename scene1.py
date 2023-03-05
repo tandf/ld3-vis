@@ -9,12 +9,12 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     dpi = 100
 
     gps_start_time = 1
-    lidar_start_time = gps_start_time + 1.5
-    imu_start_time = lidar_start_time + 1.5
-    msf_start_time = imu_start_time + 2
+    lidar_start_time = gps_start_time + 1
+    imu_start_time = lidar_start_time + 1
+    msf_start_time = imu_start_time + 1
     real_start_time = msf_start_time + 1
-    gps_attack_start_time = imu_start_time + 5
-    crash_time = gps_attack_start_time + 6
+    gps_attack_start_time = imu_start_time + 4
+    crash_time = gps_attack_start_time + 4
     duration = crash_time # seconds
 
     scene = Scene(video_dir, "scene1", duration, fps, dpi=dpi, debug=debug)
@@ -28,13 +28,13 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
               controller=Controller(Point(10, 0)))
     npc1.load_texture(heading="right")
     scene.add_actor(npc1)
-    npc2 = Car(pos=Point(108, 4),
+    npc2 = Car(pos=Point(80, 4),
               controller=Controller(Point(8, 0)))
     npc2.load_texture(heading="right")
     scene.add_actor(npc2)
 
     # Ego vehicle
-    egoController = PIDController(Point(15, 0), yref=0)
+    egoController = PIDController(Point(15, 0), yref=0, pid=(1, .2, 0))
     scene.set_ego(Car(pos=Point(0, 0), controller=egoController))
     scene.ego.load_texture()
     scene.add_actor(scene.ego)
@@ -90,7 +90,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     imu_meas_legend.add_cb(FadeInOutCB(imu_start_time))
     scene.add_actor(imu_meas_legend)
 
-    gps_attack_effect_time = gps_attack_start_time + 2
+    gps_attack_effect_time = gps_attack_start_time + 1
     # MSF measurement of ego vehicle (add normal distribution errors)
     msf_meas = Trajectory(
         scene.ego, GetPos.gausian_meas(scale=Point(.1, .1)), .1)
@@ -149,7 +149,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
         Point(6, 13), [Point(1, 0), Point(0, -1), Point(1, 0)], 1)
     gps_attack_poly.line_style["color"] = "red"
     gps_attack_poly.line_style["zorder"] = 99
-    gps_attack_poly.add_cb(FadeInOutCB(gps_attack_start_time+1))
+    gps_attack_poly.add_cb(FadeInOutCB(gps_attack_start_time+.5))
     scene.add_actor(gps_attack_poly)
 
     lidar_poly = PolyLine(Point(6, 12), [Point(2, 0)], 1)
@@ -230,6 +230,6 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     citation.add_cb(FadeInOutCB(gps_attack_start_time-1))
     scene.add_actor(citation)
 
-    scene.run(ending_freeze_time=1)
+    scene.run(ending_freeze_time=2)
     #  scene.run(start_time=gps_attack_start_time, end_time=gps_attack_start_time+4)
     scene.to_vid()
