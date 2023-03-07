@@ -10,17 +10,17 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
 
     ld_title_time = .5
     real_start_time = ld_title_time + 1
-    msf_start_time = real_start_time + 3
+    msf_start_time = real_start_time + 4
     detect_start_time = msf_start_time + 1
     ar_box_time = detect_start_time + 1
-    naive_ld2ar = ar_box_time + 4
+    naive_ld2ar = ar_box_time + 5
     ld_attack_time = naive_ld2ar + 3
-    fusion_time = ld_attack_time + 4
+    fusion_time = ld_attack_time + 5
     fusion2ar_time = fusion_time + 2
-    suspicious_explanation_time = fusion2ar_time + 4
-    mux_time = suspicious_explanation_time + 4
+    suspicious_explanation_time = fusion2ar_time + 5
+    mux_time = suspicious_explanation_time + 5
     localization_time = mux_time + 2
-    attack_time = localization_time + 4
+    attack_time = localization_time + 5
     detected_time = attack_time + 2
     stop_time = detected_time + 4
 
@@ -429,5 +429,5 @@ https://www.youtube.com/watch?v=G2VaJvNNp4k"""
     scene.add_actor(citation)
 
     #  scene.run(start_time=attack_time, end_time=attack_time+1)
-    scene.run()
+    scene.run(ending_freeze_time=1)
     scene.to_vid()
