@@ -4,27 +4,27 @@ from Actor import *
 from Controller import PIDController
 
 
-def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
+def scene2(video_dir: str, debug: bool = False, high_quality: bool = False,
+           dpi: int = 100):
     fps = 60 if high_quality else 10
-    dpi = 100
 
-    ld_title_time = .5
-    real_start_time = ld_title_time + 1
-    msf_start_time = real_start_time + 4
-    detect_start_time = msf_start_time + 1
-    ar_box_time = detect_start_time + 1
-    naive_ld2ar = ar_box_time + 5
-    ld_attack_time = naive_ld2ar + 3
-    fusion_time = ld_attack_time + 5
-    fusion2ar_time = fusion_time + 2
-    suspicious_explanation_time = fusion2ar_time + 5
-    mux_time = suspicious_explanation_time + 5
-    localization_time = mux_time + 2
-    attack_time = localization_time + 5
+    ld_title_time = 1
+    real_start_time = ld_title_time + 2
+    msf_start_time = real_start_time + 8
+    detect_start_time = msf_start_time + 3
+    ar_box_time = detect_start_time + 3
+    naive_ld2ar = ar_box_time + 8
+    ld_attack_time = naive_ld2ar + 8
+    fusion_time = ld_attack_time + 8
+    fusion2ar_time = fusion_time + 4
+    suspicious_explanation_time = fusion2ar_time + 10
+    mux_time = suspicious_explanation_time + 8
+    localization_time = mux_time + 4
+    attack_time = localization_time + 8
     detected_time = attack_time + 2
     stop_time = detected_time + 4
 
-    duration = stop_time + .5
+    duration = stop_time + 2
 
     scene = Scene(video_dir, "scene2", duration, fps, dpi=dpi, debug=debug)
 
@@ -67,6 +67,8 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
             super().step(time, view)
             self.actor.controller.speed.x = self.speed_from * \
                 (1 - self.progress) + self.speed_to * self.progress
+            if self.is_done:
+                self.actor.controller.speed.x = self.speed_to
 
     # Ego vehicle
     egoSpeed = Point(15, 0)
@@ -78,7 +80,7 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
     scene.add_actor(ego)
 
     normal_ld_meas = GetPos.gausian_meas(scale=Point(0, .1))
-    attack_ld_meas = GetPos.gausian_meas(loc=Point(0, 2), scale=Point(0, .1))
+    attack_ld_meas = GetPos.gausian_meas(loc=Point(0, 1.8), scale=Point(0, .1))
     def ld_meas_attack_action(actor: LaneDetection):
         actor._get_pos = attack_ld_meas
     def ld_meas_recover_action(actor: LaneDetection):
@@ -153,7 +155,9 @@ def scene2(video_dir: str, debug: bool = False, high_quality: bool = False):
                 self.time = 0
 
             def __call__(self, p: Point, time: float) -> Point:
-                if time > attack_time:
+                if time > stop_time:
+                    pass
+                elif time > attack_time:
                     self.y += self.dy
                     self.dy *= (1 + 0.1 * (time - self.time))
                 else:
@@ -428,6 +432,6 @@ https://www.youtube.com/watch?v=G2VaJvNNp4k"""
     citation.add_cb(FadeInOutCB(ld_title_time, msf_start_time))
     scene.add_actor(citation)
 
-    #  scene.run(start_time=attack_time, end_time=attack_time+1)
+    # scene.run(start_time=msf_start_time - 2, end_time=msf_start_time+2)
     scene.run(ending_freeze_time=1)
     scene.to_vid()

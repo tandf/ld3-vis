@@ -4,16 +4,15 @@ from Actor import *
 from Controller import *
 
 
-def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
+def scene1(video_dir: str, debug: bool = False, high_quality: bool = False,
+           dpi: int = 100):
     fps = 60 if high_quality else 10
-    dpi = 100
 
-    gps_start_time = 1
-    lidar_start_time = gps_start_time + 1
-    imu_start_time = lidar_start_time + 1
-    msf_start_time = imu_start_time + 1
-    real_start_time = msf_start_time + 1
-    gps_attack_start_time = imu_start_time + 4
+    gps_start_time = 3
+    lidar_start_time = gps_start_time + 4
+    imu_start_time = lidar_start_time + 4
+    msf_start_time = imu_start_time + 4
+    gps_attack_start_time = msf_start_time + 4
     crash_time = gps_attack_start_time + 4
     duration = crash_time # seconds
 
@@ -28,7 +27,7 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
               controller=Controller(Point(10, 0)))
     npc1.load_texture(heading="right")
     scene.add_actor(npc1)
-    npc2 = Car(pos=Point(80, 4),
+    npc2 = Car(pos=Point(164, 4),
               controller=Controller(Point(8, 0)))
     npc2.load_texture(heading="right")
     scene.add_actor(npc2)
@@ -161,21 +160,6 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     imu_poly.add_cb(FadeInOutCB(msf_start_time))
     scene.add_actor(imu_poly)
 
-    #  # Real trajectory of ego vehicle
-    #  real_meas = Trajectory(scene.ego)
-    #  real_meas.MARKER_SIZE = 40
-    #  real_meas.ANIMATION_TIME = -1
-    #  real_meas.marker_style["marker"] = "o"
-    #  real_meas.add_cb(FadeInOutCB(real_start_time))
-    #  scene.add_actor(real_meas)
-
-    #  # Real trajectory annotation
-    #  real_meas_legend = TrajLegend(
-        #  "Ground truth", Point(9, 13), marker_style=real_meas.marker_style)
-    #  real_meas_legend.MARKER_SIZE = 120
-    #  real_meas_legend.add_cb(FadeInOutCB(real_start_time))
-    #  scene.add_actor(real_meas_legend)
-
     # Attacker image
     attacker = Image("pics/attacker.png", Point(2.5, 9), w=3, h=3)
     attacker.texture.image_style["zorder"] = 99
@@ -231,5 +215,5 @@ def scene1(video_dir: str, debug: bool = False, high_quality: bool = False):
     scene.add_actor(citation)
 
     scene.run(ending_freeze_time=2)
-    #  scene.run(start_time=gps_attack_start_time, end_time=gps_attack_start_time+4)
+    # scene.run(start_time=crash_time-2, ending_freeze_time=2)
     scene.to_vid()

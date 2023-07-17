@@ -538,6 +538,8 @@ class LaneDetection(Actor):
                       upper_arrow_y, alpha=self.alpha, **self.arrow_style)
             plt.arrow(self.mpos.x, lower_arrow_y, 0, lower -
                       lower_arrow_y, alpha=self.alpha, **self.arrow_style)
+        else:
+            print("Lane detection fails to find adjecent lanes!")
 
 
 class Road(Actor):
